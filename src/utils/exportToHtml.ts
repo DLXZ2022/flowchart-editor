@@ -1,4 +1,8 @@
 import { FlowchartNode, FlowchartEdge, NodeDataType } from '../types';
+import ReactDOMServer from 'react-dom/server';
+import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import { ReactFlowInstance } from '@xyflow/react';
 
 // 数据转换接口
 interface ExportNode {
@@ -78,11 +82,258 @@ export const transformToExportFormat = (
   return { nodes: exportNodes, edges: exportEdges };
 };
 
-// 生成HTML模板
-export const generateHtmlTemplate = (data: ExportData, title: string): string => {
-  const jsonData = JSON.stringify(data);
-  
-  return `<!DOCTYPE html>
+// 导出为HTML文件
+export const exportFlowchartToHtml = async (
+  nodes: FlowchartNode[],
+  edges: FlowchartEdge[],
+  rfInstance: ReactFlowInstance,
+  title: string = '流程图',
+  options?: { 
+    sidebarContent?: string
+  }
+): Promise<void> => {
+  try {
+    // 如果有侧边栏内容，渲染为HTML
+    let sidebarHtml = '';
+    if (options?.sidebarContent) {
+      // 使用React.createElement渲染Markdown为HTML
+      const markdownElement = React.createElement(ReactMarkdown, null, options.sidebarContent);
+      const markdownHtml = ReactDOMServer.renderToStaticMarkup(markdownElement);
+      sidebarHtml = `
+        <div id="sidebar">
+          <div class="sidebar-header">
+            <h2>${title} - 说明文档</h2>
+          </div>
+          <div class="sidebar-content">
+            ${markdownHtml}
+          </div>
+        </div>
+      `;
+    }
+    
+    // 获取当前视口位置
+    const { x, y, zoom } = rfInstance.getViewport();
+    
+    // 构建节点HTML
+    const nodesHtml = nodes.map(node => {
+      // 转换位置到视口坐标
+      const translateX = node.position.x;
+      const translateY = node.position.y;
+      
+      // 获取节点数据和样式
+      const data = node.data;
+      let color = '#3b82f6'; // 默认蓝色
+      
+      // 基于节点类型设置颜色
+      if (data.type === 'typeA') color = '#3b82f6'; // 蓝色
+      else if (data.type === 'typeB') color = '#10b981'; // 绿色
+      else if (data.type === 'typeC') color = '#f59e0b'; // 黄色
+      
+      // 构建节点HTML
+      const nodeClickAttr = data.url 
+        ? `onclick="window.open('${data.url}', '_blank')" style="cursor: pointer;"` 
+        : '';
+      
+      return `
+        <div 
+          class="node" 
+          id="node-${node.id}" 
+          style="
+            left: ${translateX}px; 
+            top: ${translateY}px; 
+            background-color: ${color};
+          "
+          data-id="${node.id}"
+          data-node-type="${data.type || ''}"
+          ${nodeClickAttr}
+        >
+          <div class="node-label">${data.label || ''}</div>
+        </div>
+      `;
+    }).join('\n');
+    
+    // 构建边HTML
+    const edgesHtml = edges.map(edge => {
+      // 获取源节点和目标节点
+      const source = nodes.find(n => n.id === edge.source);
+      const target = nodes.find(n => n.id === edge.target);
+      
+      if (!source || !target) return '';
+      
+      // 获取连接点的句柄ID和位置
+      const sourceHandleId = edge.sourceHandle || '';
+      const targetHandleId = edge.targetHandle || '';
+      
+      // 解析Handle ID格式: 'direction-index-type'
+      const sourceHandleInfo = sourceHandleId ? sourceHandleId.split('-') : [];
+      const targetHandleInfo = targetHandleId ? targetHandleId.split('-') : [];
+      
+      // 获取源节点和目标节点的默认中心位置
+      let sourceX = source.position.x + 75; // 默认使用节点宽度的一半
+      let sourceY = source.position.y + 30; // 默认使用节点高度的一半
+      let targetX = target.position.x + 75;
+      let targetY = target.position.y + 30;
+      
+      // 节点宽高
+      const nodeWidth = 150;
+      const nodeHeight = 60;
+      
+      // 如果有指定的连接点，则计算连接点的位置
+      if (sourceHandleInfo.length >= 2) {
+        const [direction, index] = sourceHandleInfo;
+        // 使用类型安全的方式获取handleCounts
+        let handleCounts = 1;
+        if (direction === 'top') handleCounts = source.data.handleCounts?.top || 1;
+        else if (direction === 'bottom') handleCounts = source.data.handleCounts?.bottom || 1;
+        else if (direction === 'left') handleCounts = source.data.handleCounts?.left || 1;
+        else if (direction === 'right') handleCounts = source.data.handleCounts?.right || 1;
+        
+        const handleIndex = parseInt(index, 10);
+        const percentage = (handleIndex + 1) * 100 / (handleCounts + 1) / 100;
+        
+        switch (direction) {
+          case 'top':
+            sourceX = source.position.x + nodeWidth * percentage;
+            sourceY = source.position.y;
+            break;
+          case 'bottom':
+            sourceX = source.position.x + nodeWidth * percentage;
+            sourceY = source.position.y + nodeHeight;
+            break;
+          case 'left':
+            sourceX = source.position.x;
+            sourceY = source.position.y + nodeHeight * percentage;
+            break;
+          case 'right':
+            sourceX = source.position.x + nodeWidth;
+            sourceY = source.position.y + nodeHeight * percentage;
+            break;
+        }
+      }
+      
+      if (targetHandleInfo.length >= 2) {
+        const [direction, index] = targetHandleInfo;
+        // 使用类型安全的方式获取handleCounts
+        let handleCounts = 1;
+        if (direction === 'top') handleCounts = target.data.handleCounts?.top || 1;
+        else if (direction === 'bottom') handleCounts = target.data.handleCounts?.bottom || 1;
+        else if (direction === 'left') handleCounts = target.data.handleCounts?.left || 1;
+        else if (direction === 'right') handleCounts = target.data.handleCounts?.right || 1;
+        
+        const handleIndex = parseInt(index, 10);
+        const percentage = (handleIndex + 1) * 100 / (handleCounts + 1) / 100;
+        
+        switch (direction) {
+          case 'top':
+            targetX = target.position.x + nodeWidth * percentage;
+            targetY = target.position.y;
+            break;
+          case 'bottom':
+            targetX = target.position.x + nodeWidth * percentage;
+            targetY = target.position.y + nodeHeight;
+            break;
+          case 'left':
+            targetX = target.position.x;
+            targetY = target.position.y + nodeHeight * percentage;
+            break;
+          case 'right':
+            targetX = target.position.x + nodeWidth;
+            targetY = target.position.y + nodeHeight * percentage;
+            break;
+        }
+      }
+      
+      // 计算控制点，创建平滑的曲线
+      let controlPoint1X, controlPoint1Y, controlPoint2X, controlPoint2Y;
+      
+      // 基于连接点的方向设置控制点
+      const sourceDir = sourceHandleInfo.length >= 1 ? sourceHandleInfo[0] : 'bottom';
+      const targetDir = targetHandleInfo.length >= 1 ? targetHandleInfo[0] : 'top';
+      
+      // 控制点偏移距离 - 根据连线长度动态调整
+      const dx = Math.abs(targetX - sourceX);
+      const dy = Math.abs(targetY - sourceY);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const offset = Math.min(Math.max(distance * 0.25, 30), 150); // 最小30px，最大150px
+      
+      // 源节点控制点
+      switch (sourceDir) {
+        case 'top':
+          controlPoint1X = sourceX;
+          controlPoint1Y = sourceY - offset;
+          break;
+        case 'bottom':
+          controlPoint1X = sourceX;
+          controlPoint1Y = sourceY + offset;
+          break;
+        case 'left':
+          controlPoint1X = sourceX - offset;
+          controlPoint1Y = sourceY;
+          break;
+        case 'right':
+          controlPoint1X = sourceX + offset;
+          controlPoint1Y = sourceY;
+          break;
+        default:
+          // 默认从底部出发
+          controlPoint1X = sourceX;
+          controlPoint1Y = sourceY + offset;
+      }
+      
+      // 目标节点控制点
+      switch (targetDir) {
+        case 'top':
+          controlPoint2X = targetX;
+          controlPoint2Y = targetY - offset;
+          break;
+        case 'bottom':
+          controlPoint2X = targetX;
+          controlPoint2Y = targetY + offset;
+          break;
+        case 'left':
+          controlPoint2X = targetX - offset;
+          controlPoint2Y = targetY;
+          break;
+        case 'right':
+          controlPoint2X = targetX + offset;
+          controlPoint2Y = targetY;
+          break;
+        default:
+          // 默认从顶部进入
+          controlPoint2X = targetX;
+          controlPoint2Y = targetY - offset;
+      }
+      
+      // 创建三次贝塞尔曲线路径
+      const pathData = `M${sourceX},${sourceY} C${controlPoint1X},${controlPoint1Y} ${controlPoint2X},${controlPoint2Y} ${targetX},${targetY}`;
+      
+      // 计算边标签位置（在路径中点附近）
+      const labelX = (sourceX + targetX + controlPoint1X + controlPoint2X) / 4;
+      const labelY = (sourceY + targetY + controlPoint1Y + controlPoint2Y) / 4;
+      
+      // 构建标签HTML
+      const labelHtml = edge.data?.label 
+        ? `<div class="edge-label" style="left: ${labelX}px; top: ${labelY}px;">${edge.data.label}</div>` 
+        : '';
+      
+      // 返回边的HTML (作为SVG路径)
+      return `
+        <path 
+          id="edge-${edge.id}" 
+          class="edge" 
+          d="${pathData}" 
+          marker-end="url(#arrowhead)"
+          data-source="${edge.source}"
+          data-target="${edge.target}"
+          data-source-handle="${sourceHandleId}"
+          data-target-handle="${targetHandleId}"
+        ></path>
+        ${labelHtml}
+      `;
+    }).join('\n');
+    
+    // 创建完整的HTML
+    const htmlContent = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -95,11 +346,19 @@ export const generateHtmlTemplate = (data: ExportData, title: string): string =>
       margin: 0;
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+    }
+    .main-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
     }
     #flowchart-container {
-      width: 100%;
+      width: ${options?.sidebarContent ? 'calc(100% - 300px)' : '100%'};
       height: 100%;
       background-color: #f9fafb;
+      position: relative;
+      overflow: hidden;
     }
     .header {
       position: absolute;
@@ -112,403 +371,468 @@ export const generateHtmlTemplate = (data: ExportData, title: string): string =>
       font-size: 14px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
-    /* 基本节点样式 */
+    #flowchart-pane {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      overflow: visible;
+      transition: transform 0.05s;
+      transform-origin: 0 0;
+    }
     .node {
       box-sizing: border-box;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       position: absolute;
-      word-wrap: break-word;
-      text-align: center;
-      transition: box-shadow 0.2s, transform 0.1s;
-      cursor: pointer;
-      min-width: 150px;
-      min-height: 60px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      width: 150px;
+      height: 60px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       color: white;
       font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
       user-select: none;
-      transform-origin: center;
+      z-index: 2;
+      transition: box-shadow 0.2s;
+      overflow: visible;
     }
     .node:hover {
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
-    /* 连接线样式 */
-    .edge {
+    .node-label {
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .edge-container {
       position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      z-index: 1;
       pointer-events: none;
+      overflow: visible;
+    }
+    .edge {
+      fill: none;
       stroke: #666;
       stroke-width: 2px;
+      pointer-events: none;
+      transition: stroke 0.3s, stroke-width 0.3s;
+    }
+    .edge-highlighted {
+      stroke: #3b82f6;
+      stroke-width: 3px;
+      filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.5));
     }
     .edge-label {
       position: absolute;
-      background-color: rgba(255,255,255,0.7);
-      padding: 2px 4px;
-      border-radius: 3px;
+      padding: 3px 6px;
+      background-color: white;
+      border-radius: 4px;
       font-size: 12px;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      z-index: 1;
       pointer-events: none;
+      transition: box-shadow 0.3s;
     }
-    /* 箭头标记 */
-    .arrow {
-      fill: #666;
+    .node:hover + .edge-label {
+      box-shadow: 0 2px 5px rgba(59, 130, 246, 0.4);
+    }
+    #sidebar {
+      width: 300px;
+      height: 100%;
+      background-color: white;
+      border-left: 1px solid #e5e7eb;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.05);
+      overflow-y: auto;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      background-color: #f9fafb;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .sidebar-header h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      color: #374151;
+      display: flex;
+      align-items: center;
+    }
+    .sidebar-header h2:before {
+      content: '📄';
+      margin-right: 8px;
+      font-size: 1.2em;
+    }
+    .sidebar-content {
+      padding: 1rem;
+      line-height: 1.6;
+      color: #374151;
+      font-size: 0.95rem;
+      flex: 1;
+    }
+    .sidebar-content h1, .sidebar-content h2, .sidebar-content h3 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      color: #111827;
+      font-weight: 600;
+    }
+    .sidebar-content h1 {
+      font-size: 1.5rem;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 0.5rem;
+    }
+    .sidebar-content h2 {
+      font-size: 1.3rem;
+      border-bottom: 1px solid #f3f4f6;
+      padding-bottom: 0.3rem;
+    }
+    .sidebar-content h3 {
+      font-size: 1.1rem;
+    }
+    .sidebar-content p {
+      margin-bottom: 1rem;
+    }
+    .sidebar-content ul, .sidebar-content ol {
+      margin-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .sidebar-content li {
+      margin-bottom: 0.5rem;
+    }
+    .sidebar-content a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    .sidebar-content a:hover {
+      text-decoration: underline;
+    }
+    .sidebar-content code {
+      background-color: #f3f4f6;
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.25rem;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    .sidebar-content pre {
+      background-color: #f3f4f6;
+      padding: 1rem;
+      border-radius: 0.25rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      border: 1px solid #e5e7eb;
+    }
+    .sidebar-content pre code {
+      background-color: transparent;
+      padding: 0;
+      display: block;
+    }
+    .sidebar-content blockquote {
+      border-left: 4px solid #3b82f6;
+      padding-left: 1rem;
+      margin-left: 0;
+      margin-right: 0;
+      font-style: italic;
+      color: #4b5563;
+      background-color: #f9fafb;
+      padding: 0.5rem 1rem;
+      border-radius: 0 0.25rem 0.25rem 0;
+    }
+    .sidebar-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    .sidebar-content th, .sidebar-content td {
+      border: 1px solid #e5e7eb;
+      padding: 0.5rem;
+    }
+    .sidebar-content th {
+      background-color: #f9fafb;
+      font-weight: 600;
+    }
+    .sidebar-content tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    .sidebar-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.25rem;
+      margin: 1rem 0;
+    }
+    .sidebar-content hr {
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+      margin: 1.5rem 0;
+    }
+    .zoom-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      z-index: 100;
+    }
+    .zoom-button {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .zoom-button:hover {
+      background: #f1f1f1;
     }
   </style>
 </head>
 <body>
-  <div class="header">${title}</div>
-  <div id="flowchart-container"></div>
-  
+  <div class="main-container">
+    <div id="flowchart-container">
+      <div class="header">${title}</div>
+      <div id="flowchart-pane" style="transform: translate(${x}px, ${y}px) scale(${zoom});">
+        <!-- 连线 -->
+        <svg class="edge-container" width="100%" height="100%" style="position: absolute; overflow: visible; z-index: 1;">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+            </marker>
+          </defs>
+          ${edgesHtml}
+        </svg>
+        
+        <!-- 节点 -->
+        ${nodesHtml}
+      </div>
+      <div class="zoom-controls">
+        <button class="zoom-button" id="zoom-in">+</button>
+        <button class="zoom-button" id="zoom-out">−</button>
+        <button class="zoom-button" id="zoom-reset">⟲</button>
+      </div>
+    </div>
+    ${sidebarHtml}
+  </div>
   <script>
-    // 防止点击劫持
-    if (window.self !== window.top) {
-      window.top.location = window.self.location;
+    // 拖拽和缩放功能
+    const container = document.getElementById('flowchart-container');
+    const pane = document.getElementById('flowchart-pane');
+    
+    let scale = ${zoom};
+    let translateX = ${x};
+    let translateY = ${y};
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    
+    // 应用变换
+    function applyTransform() {
+      pane.style.transform = \`translate(\${translateX}px, \${translateY}px) scale(\${scale})\`;
     }
     
-    // 流程图数据
-    const data = ${jsonData};
+    // 注册拖拽事件
+    container.addEventListener('mousedown', (e) => {
+      // 如果点击的是节点，不启动拖拽
+      if (e.target.closest('.node')) {
+        return;
+      }
+      
+      isDragging = true;
+      dragStartX = e.clientX - translateX;
+      dragStartY = e.clientY - translateY;
+      container.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
     
-    // 简单流程图渲染器
-    class SimpleFlowchart {
-      constructor(containerId, data) {
-        this.container = document.getElementById(containerId);
-        this.nodes = data.nodes || [];
-        this.edges = data.edges || [];
-        this.svg = null;
-        this.nodeElements = {};
-        this.zoomLevel = 1;
-        this.offsetX = 0;
-        this.offsetY = 0;
-        this.isDragging = false;
-        this.lastX = 0;
-        this.lastY = 0;
-        
-        // 初始化
-        this.init();
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      translateX = e.clientX - dragStartX;
+      translateY = e.clientY - dragStartY;
+      applyTransform();
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        container.style.cursor = 'default';
+      }
+    });
+    
+    // 缩放功能
+    document.getElementById('zoom-in').addEventListener('click', () => {
+      scale *= 1.2;
+      applyTransform();
+    });
+    
+    document.getElementById('zoom-out').addEventListener('click', () => {
+      scale /= 1.2;
+      applyTransform();
+    });
+    
+    document.getElementById('zoom-reset').addEventListener('click', () => {
+      // 重置为最佳视图
+      resetViewToFitAll();
+    });
+    
+    // 添加鼠标滚轮缩放
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      
+      // 获取鼠标相对于容器的位置
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // 缩放前鼠标位置在画布坐标系中的位置
+      const mouseBoxX = (mouseX - translateX) / scale;
+      const mouseBoxY = (mouseY - translateY) / scale;
+      
+      // 计算新的缩放值
+      const newScale = scale * delta;
+      
+      // 更新缩放值
+      scale = newScale;
+      
+      // 计算新的平移值，保持鼠标位置不变
+      translateX = mouseX - mouseBoxX * newScale;
+      translateY = mouseY - mouseBoxY * newScale;
+      
+      applyTransform();
+    }, { passive: false });
+    
+    // 函数：重置视图以适应所有节点
+    function resetViewToFitAll() {
+      const nodes = document.querySelectorAll('.node');
+      if (nodes.length === 0) {
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        applyTransform();
+        return;
       }
       
-      init() {
-        // 清空容器
-        this.container.innerHTML = '';
-        
-        // 创建SVG用于绘制连接线
-        this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        this.svg.style.position = 'absolute';
-        this.svg.style.top = '0';
-        this.svg.style.left = '0';
-        this.svg.style.width = '100%';
-        this.svg.style.height = '100%';
-        this.svg.style.pointerEvents = 'none';
-        this.svg.setAttribute('class', 'edges-container');
-        this.container.appendChild(this.svg);
-        
-        // 创建箭头标记定义
-        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-        marker.setAttribute('id', 'arrowhead');
-        marker.setAttribute('markerWidth', '10');
-        marker.setAttribute('markerHeight', '7');
-        marker.setAttribute('refX', '10');
-        marker.setAttribute('refY', '3.5');
-        marker.setAttribute('orient', 'auto');
-        
-        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
-        polygon.setAttribute('class', 'arrow');
-        marker.appendChild(polygon);
-        defs.appendChild(marker);
-        this.svg.appendChild(defs);
-        
-        // 渲染节点
-        this.renderNodes();
-        
-        // 渲染连接
-        this.renderEdges();
-        
-        // 添加事件监听
-        this.setupEvents();
-        
-        // 初始调整视图
-        this.fitView();
-      }
+      // 计算节点边界
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
       
-      renderNodes() {
-        this.nodes.forEach(node => {
-          const nodeEl = document.createElement('div');
-          nodeEl.setAttribute('class', 'node');
-          nodeEl.setAttribute('data-id', node.id);
-          nodeEl.setAttribute('data-url', node.url || '');
-          nodeEl.style.backgroundColor = node.color;
-          nodeEl.style.borderColor = node.color;
-          
-          // 设置初始位置 - 左上角
-          nodeEl.style.left = (node.position[0] - 75) + 'px'; // 假设宽度150px的一半
-          nodeEl.style.top = (node.position[1] - 30) + 'px'; // 假设高度60px的一半
-          
-          const labelEl = document.createElement('div');
-          labelEl.textContent = node.label;
-          nodeEl.appendChild(labelEl);
-          
-          this.container.appendChild(nodeEl);
-          this.nodeElements[node.id] = nodeEl;
-          
-          // 添加点击事件
-          nodeEl.addEventListener('click', () => {
-            const url = nodeEl.getAttribute('data-url');
-            if (url) {
-              window.open(url.startsWith('http') ? url : 'https://' + url, '_blank', 'noopener,noreferrer');
+      nodes.forEach(node => {
+        const left = parseInt(node.style.left);
+        const top = parseInt(node.style.top);
+        
+        minX = Math.min(minX, left);
+        minY = Math.min(minY, top);
+        maxX = Math.max(maxX, left + 150); // 节点宽度
+        maxY = Math.max(maxY, top + 60);  // 节点高度
+      });
+      
+      // 添加边距
+      const padding = 100; // 增加边距，确保连线完全可见
+      minX -= padding;
+      minY -= padding;
+      maxX += padding;
+      maxY += padding;
+      
+      // 计算容器尺寸
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      
+      // 计算合适的缩放比例
+      const contentWidth = maxX - minX;
+      const contentHeight = maxY - minY;
+      
+      const scaleX = containerWidth / contentWidth;
+      const scaleY = containerHeight / contentHeight;
+      
+      // 选择较小的缩放比例，确保内容完全可见
+      scale = Math.min(scaleX, scaleY, 1.5); // 限制最大缩放
+      
+      // 计算中心点
+      const contentCenterX = (minX + maxX) / 2;
+      const contentCenterY = (minY + maxY) / 2;
+      
+      // 计算平移量，使内容居中
+      translateX = containerWidth / 2 - contentCenterX * scale;
+      translateY = containerHeight / 2 - contentCenterY * scale;
+      
+      applyTransform();
+    }
+    
+    // 添加节点悬停效果
+    document.querySelectorAll('.node').forEach(node => {
+      node.addEventListener('mouseenter', () => {
+        // 突出显示与该节点相关的连线
+        const nodeId = node.getAttribute('data-id');
+        if (nodeId) {
+          document.querySelectorAll('path.edge').forEach(edge => {
+            const source = edge.getAttribute('data-source');
+            const target = edge.getAttribute('data-target');
+            if (source === nodeId || target === nodeId) {
+              edge.classList.add('edge-highlighted');
             }
           });
-        });
-      }
+        }
+      });
       
-      renderEdges() {
-        // 清除现有连线和标签
-        this.svg.querySelectorAll('.edge').forEach(edge => edge.remove());
-        this.container.querySelectorAll('.edge-label').forEach(label => label.remove());
-        
-        this.edges.forEach(edge => {
-          const sourceNode = this.nodeElements[edge.from];
-          const targetNode = this.nodeElements[edge.to];
-          
-          if (!sourceNode || !targetNode) return;
-          
-          // 获取节点位置
-          const sourceRect = sourceNode.getBoundingClientRect();
-          const targetRect = targetNode.getBoundingClientRect();
-          const containerRect = this.container.getBoundingClientRect();
-          
-          // 计算节点中心点
-          const sourceX = sourceRect.left + sourceRect.width / 2 - containerRect.left;
-          const sourceY = sourceRect.top + sourceRect.height / 2 - containerRect.top;
-          const targetX = targetRect.left + targetRect.width / 2 - containerRect.left;
-          const targetY = targetRect.top + targetRect.height / 2 - containerRect.top;
-          
-          // 计算连线起点和终点（节点边缘）
-          const angle = Math.atan2(targetY - sourceY, targetX - sourceX);
-          const sourceNodeRadius = Math.min(sourceRect.width, sourceRect.height) / 2;
-          const targetNodeRadius = Math.min(targetRect.width, targetRect.height) / 2;
-          
-          const x1 = sourceX + Math.cos(angle) * sourceNodeRadius;
-          const y1 = sourceY + Math.sin(angle) * sourceNodeRadius;
-          const x2 = targetX - Math.cos(angle) * (targetNodeRadius + 10); // 箭头前稍微偏移，避免覆盖
-          const y2 = targetY - Math.sin(angle) * (targetNodeRadius + 10);
-          
-          // 创建连接线
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', String(x1));
-          line.setAttribute('y1', String(y1));
-          line.setAttribute('x2', String(x2));
-          line.setAttribute('y2', String(y2));
-          line.setAttribute('class', 'edge');
-          line.setAttribute('marker-end', 'url(#arrowhead)');
-          this.svg.appendChild(line);
-          
-          // 如果有标签，添加标签
-          if (edge.label) {
-            const labelX = (x1 + x2) / 2;
-            const labelY = (y1 + y2) / 2 - 10; // 稍微上移，避免覆盖线
-            
-            const labelEl = document.createElement('div');
-            labelEl.setAttribute('class', 'edge-label');
-            labelEl.textContent = edge.label;
-            labelEl.style.left = labelX + 'px';
-            labelEl.style.top = labelY + 'px';
-            labelEl.style.transform = 'translate(-50%, -50%)'; // 居中
-            this.container.appendChild(labelEl);
-          }
+      node.addEventListener('mouseleave', () => {
+        // 取消突出显示
+        document.querySelectorAll('path.edge.edge-highlighted').forEach(edge => {
+          edge.classList.remove('edge-highlighted');
         });
-      }
-      
-      setupEvents() {
-        // 拖动视图
-        this.container.addEventListener('mousedown', (e) => {
-          if (e.target === this.container) {
-            this.isDragging = true;
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
-            this.container.style.cursor = 'grabbing';
-          }
-        });
-        
-        document.addEventListener('mousemove', (e) => {
-          if (this.isDragging) {
-            const dx = e.clientX - this.lastX;
-            const dy = e.clientY - this.lastY;
-            this.offsetX += dx;
-            this.offsetY += dy;
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
-            this.updateTransform();
-          }
-        });
-        
-        document.addEventListener('mouseup', () => {
-          this.isDragging = false;
-          this.container.style.cursor = 'default';
-        });
-        
-        // 缩放视图
-        this.container.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          const delta = e.deltaY > 0 ? -0.1 : 0.1;
-          const newZoom = Math.max(0.5, Math.min(2, this.zoomLevel + delta));
-          
-          // 计算缩放中心点
-          const rect = this.container.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          
-          // 计算新的偏移量，保持鼠标位置不变
-          this.offsetX = x - (x - this.offsetX) * (newZoom / this.zoomLevel);
-          this.offsetY = y - (y - this.offsetY) * (newZoom / this.zoomLevel);
-          
-          this.zoomLevel = newZoom;
-          this.updateTransform();
-        });
-        
-        // 窗口大小变化时重新布局
-        window.addEventListener('resize', () => {
-          this.renderEdges();
-        });
-      }
-      
-      updateTransform() {
-        Object.values(this.nodeElements).forEach(nodeEl => {
-          const id = nodeEl.getAttribute('data-id');
-          const node = this.nodes.find(n => n.id === id);
-          
-          if (!node) return;
-          
-          // 应用缩放和偏移
-          const baseX = parseFloat(nodeEl.style.left);
-          const baseY = parseFloat(nodeEl.style.top);
-          
-          const x = baseX * this.zoomLevel + this.offsetX;
-          const y = baseY * this.zoomLevel + this.offsetY;
-          
-          nodeEl.style.transform = "translate(" + (x - baseX) + "px, " + (y - baseY) + "px) scale(" + this.zoomLevel + ")";
-        });
-        
-        // 重新渲染连接线
-        this.renderEdges();
-      }
-      
-      fitView() {
-        // 如果没有节点，直接返回
-        if (this.nodes.length === 0) return;
-        
-        // 计算所有节点的范围
-        let minX = Number.MAX_VALUE;
-        let minY = Number.MAX_VALUE;
-        let maxX = Number.MIN_VALUE;
-        let maxY = Number.MIN_VALUE;
-        
-        this.nodes.forEach(node => {
-          minX = Math.min(minX, node.position[0]);
-          minY = Math.min(minY, node.position[1]);
-          maxX = Math.max(maxX, node.position[0]);
-          maxY = Math.max(maxY, node.position[1]);
-        });
-        
-        // 添加边距
-        minX -= 100;
-        minY -= 100;
-        maxX += 100;
-        maxY += 100;
-        
-        // 计算宽高比
-        const contentWidth = maxX - minX;
-        const contentHeight = maxY - minY;
-        const containerWidth = this.container.clientWidth;
-        const containerHeight = this.container.clientHeight;
-        
-        console.log('节点范围:', {minX, minY, maxX, maxY});
-        console.log('内容尺寸:', {contentWidth, contentHeight});
-        console.log('容器尺寸:', {containerWidth, containerHeight});
-        
-        // 计算缩放比例，确保完全显示所有内容
-        const scaleX = containerWidth / contentWidth;
-        const scaleY = containerHeight / contentHeight;
-        this.zoomLevel = Math.min(scaleX, scaleY, 1) * 0.9; // 额外缩小一点以确保有边距
-        
-        // 计算偏移量，使内容居中
-        const contentCenterX = (minX + maxX) / 2;
-        const contentCenterY = (minY + maxY) / 2;
-        const containerCenterX = containerWidth / 2;
-        const containerCenterY = containerHeight / 2;
-        
-        this.offsetX = containerCenterX - contentCenterX * this.zoomLevel;
-        this.offsetY = containerCenterY - contentCenterY * this.zoomLevel;
-        
-        console.log('应用变换:', {zoom: this.zoomLevel, offsetX: this.offsetX, offsetY: this.offsetY});
-        
-        // 更新变换
-        this.updateTransform();
-      }
-    }
+      });
+    });
     
-    // 初始化流程图
-    window.onload = function() {
-      try {
-        // 计算适合容器大小的初始缩放和位置
-        setTimeout(() => {
-          const flowchart = new SimpleFlowchart('flowchart-container', data);
-          console.log('流程图初始化成功');
-          console.log('节点数量:', data.nodes.length);
-          console.log('连接数量:', data.edges.length);
-          
-          // 再次延迟调用fitView，确保DOM已完全渲染
-          setTimeout(() => {
-            flowchart.fitView();
-          }, 100);
-        }, 0);
-      } catch (err) {
-        console.error('初始化流程图时出错:', err);
-        document.getElementById('flowchart-container').innerHTML = 
-          '<div style="color: red; padding: 20px;">初始化流程图失败: ' + err.message + '</div>';
-      }
-    };
+    // 在加载完成后自动调整视图
+    document.addEventListener('DOMContentLoaded', function() {
+      // 自动调整视图，确保所有节点可见
+      setTimeout(resetViewToFitAll, 100);
+    });
   </script>
 </body>
 </html>`;
-};
-
-// 导出为HTML文件
-export const exportFlowchartToHtml = (
-  nodes: FlowchartNode[],
-  edges: FlowchartEdge[],
-  title: string = '流程图',
-  options?: { urlValidator?: RegExp }
-): void => {
-  // 转换数据
-  const exportData = transformToExportFormat(nodes, edges, options);
-  
-  // 生成HTML内容
-  const htmlContent = generateHtmlTemplate(exportData, title);
-  
-  // 创建Blob
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  
-  // 创建下载链接
-  const url = URL.createObjectURL(blob);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-  const filename = `${title}-${timestamp}.html`;
-  
-  // 触发下载
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  
-  // 清理
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 100);
+    
+    // 创建Blob
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    
+    // 创建下载链接
+    const url = URL.createObjectURL(blob);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const filename = `${title}-${timestamp}.html`;
+    
+    // 触发下载
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    
+    // 清理
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (error) {
+    console.error('导出流程图时出错:', error);
+    alert('导出失败: ' + (error instanceof Error ? error.message : String(error)));
+  }
 }; 

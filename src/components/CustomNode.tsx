@@ -29,6 +29,14 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
   const [description, setDescription] = useState(data.description || '');
   const [urlError, setUrlError] = useState<string | null>(null);
   
+  // 为连接点数量添加状态
+  const [handleCounts, setHandleCounts] = useState({
+    top: data.handleCounts?.top ?? 1,
+    bottom: data.handleCounts?.bottom ?? 1,
+    left: data.handleCounts?.left ?? 1,
+    right: data.handleCounts?.right ?? 1
+  });
+  
   // 获取翻转状态
   const flipped = !!data.flipped;
 
@@ -90,19 +98,146 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
     updateNodeData({ description: newDescription });
   }, [updateNodeData]);
 
+  // 处理连接点数量变更
+  const handleCountChange = useCallback((side: 'top' | 'bottom' | 'left' | 'right', value: string) => {
+    const count = parseInt(value, 10);
+    if (!isNaN(count) && count >= 0 && count <= 4) {
+      setHandleCounts(prev => {
+        const newCounts = { ...prev, [side]: count };
+        // 同时更新节点数据
+        updateNodeData({ 
+          handleCounts: newCounts
+        });
+        return newCounts;
+      });
+    }
+  }, [updateNodeData]);
+
   // 获取节点样式
   const nodeStyle = nodeTypeStyles[data.type as NodeType] || 'bg-gray-500 border-gray-700';
 
+  // 生成连接点列表
+  const renderHandles = () => {
+    if (flipped) return null; // 在编辑模式下不显示连接点
+    
+    // 获取实际连接点数量（默认为1）
+    const counts = {
+      top: data.handleCounts?.top ?? 1,
+      bottom: data.handleCounts?.bottom ?? 1,
+      left: data.handleCounts?.left ?? 1,
+      right: data.handleCounts?.right ?? 1
+    };
+    
+    const handles = [];
+    
+    // 顶部连接点
+    for (let i = 0; i < counts.top; i++) {
+      const percentage = (i + 1) * 100 / (counts.top + 1);
+      handles.push(
+        <React.Fragment key={`top-${i}`}>
+          <Handle
+            type="target"
+            id={`top-${i}-target`}
+            position={Position.Top}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            style={{ left: `${percentage}%`, zIndex: 10 }}
+          />
+          <Handle
+            type="source"
+            id={`top-${i}-source`}
+            position={Position.Top}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-transparent"
+            style={{ left: `${percentage}%`, zIndex: 9 }}
+          />
+        </React.Fragment>
+      );
+    }
+    
+    // 底部连接点
+    for (let i = 0; i < counts.bottom; i++) {
+      const percentage = (i + 1) * 100 / (counts.bottom + 1);
+      handles.push(
+        <React.Fragment key={`bottom-${i}`}>
+          <Handle
+            type="source"
+            id={`bottom-${i}-source`}
+            position={Position.Bottom}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            style={{ left: `${percentage}%`, zIndex: 10 }}
+          />
+          <Handle
+            type="target"
+            id={`bottom-${i}-target`}
+            position={Position.Bottom}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-transparent"
+            style={{ left: `${percentage}%`, zIndex: 9 }}
+          />
+        </React.Fragment>
+      );
+    }
+    
+    // 左侧连接点
+    for (let i = 0; i < counts.left; i++) {
+      const percentage = (i + 1) * 100 / (counts.left + 1);
+      handles.push(
+        <React.Fragment key={`left-${i}`}>
+          <Handle
+            type="target"
+            id={`left-${i}-target`}
+            position={Position.Left}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            style={{ top: `${percentage}%`, zIndex: 10 }}
+          />
+          <Handle
+            type="source"
+            id={`left-${i}-source`}
+            position={Position.Left}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-transparent"
+            style={{ top: `${percentage}%`, zIndex: 9 }}
+          />
+        </React.Fragment>
+      );
+    }
+    
+    // 右侧连接点
+    for (let i = 0; i < counts.right; i++) {
+      const percentage = (i + 1) * 100 / (counts.right + 1);
+      handles.push(
+        <React.Fragment key={`right-${i}`}>
+          <Handle
+            type="source"
+            id={`right-${i}-source`}
+            position={Position.Right}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            style={{ top: `${percentage}%`, zIndex: 10 }}
+          />
+          <Handle
+            type="target"
+            id={`right-${i}-target`}
+            position={Position.Right}
+            isConnectable={isConnectable}
+            className="w-4 h-4 bg-transparent"
+            style={{ top: `${percentage}%`, zIndex: 9 }}
+          />
+        </React.Fragment>
+      );
+    }
+    
+    return handles;
+  };
+
   return (
     <>
-      {/* 顶部连接点 */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        isConnectable={isConnectable}
-        className="w-3 h-3 bg-white"
-      />
-
+      {/* 动态渲染连接点 */}
+      {renderHandles()}
+      
       {/* 节点主体 */}
       <div className={`relative border-2 rounded-lg shadow-lg p-4 w-full h-full ${flipped ? 'bg-white' : nodeStyle}`}>
         {!flipped ? (
@@ -173,20 +308,90 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
               ></textarea>
             </div>
             
+            {/* 连接点数量设置 */}
+            <div className="mb-3">
+              <div className="font-medium text-gray-700 mb-2 text-sm">连接点设置:</div>
+              <div className="grid grid-cols-2 gap-2">
+                {/* 顶部连接点 */}
+                <div className="mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    顶部连接点:
+                  </label>
+                  <select
+                    value={handleCounts.top}
+                    onChange={(e) => handleCountChange('top', e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
+                  >
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                
+                {/* 底部连接点 */}
+                <div className="mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    底部连接点:
+                  </label>
+                  <select
+                    value={handleCounts.bottom}
+                    onChange={(e) => handleCountChange('bottom', e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
+                  >
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                
+                {/* 左侧连接点 */}
+                <div className="mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    左侧连接点:
+                  </label>
+                  <select
+                    value={handleCounts.left}
+                    onChange={(e) => handleCountChange('left', e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
+                  >
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                
+                {/* 右侧连接点 */}
+                <div className="mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    右侧连接点:
+                  </label>
+                  <select
+                    value={handleCounts.right}
+                    onChange={(e) => handleCountChange('right', e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
+                  >
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
             <div className="text-xs text-gray-500 text-right mt-2">
               右键点击返回
             </div>
           </>
         )}
       </div>
-
-      {/* 底部连接点 */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        isConnectable={isConnectable}
-        className="w-3 h-3 bg-white"
-      />
     </>
   );
 };

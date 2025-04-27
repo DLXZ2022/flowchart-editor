@@ -7,13 +7,15 @@ const STORAGE_KEY = 'flowchart-editor-data';
 export const saveFlowchartToLocalStorage = (
   nodes: FlowchartNode[], 
   edges: FlowchartEdge[],
-  viewport?: { x: number; y: number; zoom: number }
+  viewport?: { x: number; y: number; zoom: number },
+  sidebarContent?: string
 ): void => {
   try {
     const flowchartData: FlowchartJson = {
       nodes,
       edges,
-      viewport: viewport || { x: 0, y: 0, zoom: 1 }
+      viewport: viewport || { x: 0, y: 0, zoom: 1 },
+      sidebarContent
     };
     
     // 转换为JSON字符串并保存

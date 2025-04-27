@@ -10,17 +10,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tiptap/pm": "^2.4.0",
+    "@heroicons/react": "^2.2.0",
+    "@tiptap/pm": "^2.11.7",
     "@tiptap/react": "^2.11.7",
     "@tiptap/starter-kit": "^2.11.7",
     "@xyflow/react": "^12.6.0",
     "elkjs": "^0.9.3",
+    "html-to-image": "^1.11.13",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
     "yjs": "^13.6.26",
     "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",

@@ -36,7 +36,7 @@ if not exist "node_modules\" (
 )
 
 echo 正在启动流程图编辑器...
-start http://localhost:3000
+start http://localhost:5173
 npm run dev
 
 pause 

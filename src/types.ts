@@ -8,6 +8,12 @@ export interface NodeDataType {
   comments?: string;
   type: 'typeA' | 'typeB' | 'typeC';
   flipped?: boolean;
+  handleCounts?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
   [key: string]: unknown;
 }
 
@@ -27,4 +33,5 @@ export interface FlowchartJson {
   nodes: FlowchartNode[];
   edges: FlowchartEdge[];
   viewport: Viewport;
+  sidebarContent?: string; // 侧边栏markdown内容
 } 

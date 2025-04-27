@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ReactFlowInstance } from '@xyflow/react';
-import { FlowchartNode, FlowchartEdge, NodeDataType } from '../types';
+import { NodeDataType } from '../types';
 import { exportFlowToJson, importFlowFromJson } from '../utils/jsonUtils';
-import ExportHtmlButton from './ExportHtmlButton';
+import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface ToolbarProps {
   onAddNode: (type: NodeDataType['type']) => void;
@@ -15,6 +15,9 @@ interface ToolbarProps {
   autoSaveEnabled?: boolean;
   onToggleAutoSave?: () => void;
   lastSavedTime?: string;
+  toggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
+  exportHtmlButton?: React.ReactNode;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -28,6 +31,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   autoSaveEnabled = true,
   onToggleAutoSave,
   lastSavedTime = '未保存',
+  toggleSidebar,
+  isSidebarOpen = false,
+  exportHtmlButton,
 }) => {
   const [jsonVisible, setJsonVisible] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -135,7 +141,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
             </span>
           )}
           <div className="border-l border-gray-300 h-6 mx-1"></div>
-          <ExportHtmlButton className="px-3 py-1" />
+          {exportHtmlButton}
           <button
             onClick={handleExport}
             className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
@@ -148,6 +154,26 @@ const Toolbar: React.FC<ToolbarProps> = ({
           >
             导入JSON
           </button>
+          {toggleSidebar && (
+            <button
+              onClick={() => {
+                console.log('切换侧边栏按钮被点击');
+                toggleSidebar();
+              }}
+              className={`p-2 rounded ${
+                isSidebarOpen 
+                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                  : 'bg-gray-200 hover:bg-gray-300'
+              }`}
+              title={isSidebarOpen ? '关闭侧边栏' : '打开侧边栏'}
+            >
+              {isSidebarOpen ? (
+                <XMarkIcon className="w-5 h-5" />
+              ) : (
+                <Bars3Icon className="w-5 h-5" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 

@@ -23,6 +23,9 @@ import '@xyflow/react/dist/style.css';
 import CustomNode from './components/CustomNode';
 import CustomEdge from './components/CustomEdge';
 import Toolbar from './components/Toolbar';
+import Sidebar from './components/Sidebar';
+import SidebarContent from './components/SidebarContent';
+import ExportHtmlButton from './components/ExportHtmlButton';
 
 // 工具函数和类型
 import { NodeDataType, EdgeData, FlowchartNode, FlowchartEdge } from './types';
@@ -59,7 +62,8 @@ const initialNodes: FlowchartNode[] = [
       url: 'https://example.com', 
       type: 'typeA',
       description: '这是网站的主页，包含网站的基本介绍和导航',
-      flipped: false
+      flipped: false,
+      handleCounts: { top: 1, bottom: 1, left: 1, right: 1 }
     },
   },
   {
@@ -71,7 +75,8 @@ const initialNodes: FlowchartNode[] = [
       url: 'https://example.com/products', 
       type: 'typeB',
       description: '展示公司的主要产品和服务内容',
-      flipped: false
+      flipped: false,
+      handleCounts: { top: 1, bottom: 1, left: 1, right: 1 }
     },
   },
 ];
@@ -93,6 +98,11 @@ const FlowchartEditor: React.FC = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
   const [lastSavedTime, setLastSavedTime] = useState<string>('未保存');
+  
+  // 侧边栏状态
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const [sidebarContent, setSidebarContent] = useState<string>('');
+  const [isEditing, setIsEditing] = useState<boolean>(false);
   
   // 获取React Flow实例引用，用于导出功能
   const { getNodes, getEdges, getViewport, setViewport } = useReactFlow();
@@ -119,6 +129,10 @@ const FlowchartEditor: React.FC = () => {
             });
           }, 100);
         }
+        // 加载侧边栏内容
+        if (savedData.sidebarContent) {
+          setSidebarContent(savedData.sidebarContent);
+        }
       }
     }
   }, [setNodes, setEdges, setViewport]);
@@ -129,13 +143,20 @@ const FlowchartEditor: React.FC = () => {
     const currentEdges = getEdges() as FlowchartEdge[];
     const viewport = getViewport();
     
-    saveFlowchartToLocalStorage(currentNodes, currentEdges, viewport);
+    saveFlowchartToLocalStorage(currentNodes, currentEdges, viewport, sidebarContent);
     
     // 更新最后保存时间
     const now = new Date();
     const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
     setLastSavedTime(timeString);
-  }, [getNodes, getEdges, getViewport]);
+  }, [getNodes, getEdges, getViewport, sidebarContent]);
+  
+  // 侧边栏内容变化处理
+  const handleSidebarContentChange = useCallback((content: string) => {
+    setSidebarContent(content);
+    // 标记有未保存的更改
+    setLastSavedTime('有未保存的更改');
+  }, []);
   
   // 清除保存的流程图
   const clearSavedFlowchart = useCallback(() => {
@@ -218,7 +239,8 @@ const FlowchartEditor: React.FC = () => {
           type: type,
           url: '',
           description: '请右键点击添加描述',
-          flipped: false
+          flipped: false,
+          handleCounts: { top: 1, bottom: 1, left: 1, right: 1 } // 默认每边1个连接点
         },
       };
       
@@ -316,6 +338,30 @@ const FlowchartEditor: React.FC = () => {
     [edges]
   );
 
+  // 切换侧边栏开关
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => {
+      const newState = !prev;
+      console.log('侧边栏状态:', newState); // 添加调试日志
+      return newState;
+    });
+  }, []);
+
+  // 切换编辑/预览模式
+  const toggleEditMode = useCallback(() => {
+    setIsEditing(prev => !prev);
+  }, []);
+
+  // 渲染ExportHtmlButton组件，传递sidebarContent
+  const renderExportHtmlButton = useCallback(() => {
+    return (
+      <ExportHtmlButton 
+        className="px-3 py-1" 
+        sidebarContent={sidebarContent} 
+      />
+    );
+  }, [sidebarContent]);
+
   return (
     <div className="w-full h-screen">
       <Toolbar
@@ -329,8 +375,11 @@ const FlowchartEditor: React.FC = () => {
         autoSaveEnabled={autoSaveEnabled}
         onToggleAutoSave={toggleAutoSave}
         lastSavedTime={lastSavedTime}
+        toggleSidebar={toggleSidebar}
+        isSidebarOpen={sidebarOpen}
+        exportHtmlButton={renderExportHtmlButton()}
       />
-      <div className="h-[calc(100%-60px)]">
+      <div className="h-[calc(100%-60px)] relative">
         <ReactFlow
           nodes={nodes as any}
           edges={edges as any}
@@ -351,6 +400,20 @@ const FlowchartEditor: React.FC = () => {
           <MiniMap />
           <Background />
         </ReactFlow>
+        
+        {/* 侧边栏 */}
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={toggleSidebar}
+          title="流程图注释"
+        >
+          <SidebarContent
+            markdownContent={sidebarContent}
+            onContentChange={handleSidebarContentChange}
+            isEditing={isEditing}
+            onToggleEdit={toggleEditMode}
+          />
+        </Sidebar>
       </div>
     </div>
   );
