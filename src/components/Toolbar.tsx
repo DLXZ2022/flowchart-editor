@@ -157,6 +157,77 @@ const Toolbar: React.FC<ToolbarProps> = ({
     }
   };
 
+  // 处理高级生成
+  const handleAdvancedGenerateFromUrl = async () => {
+    if (!url.trim()) {
+      setErrorMessage('请输入有效的URL');
+      return;
+    }
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setUrl(`https://${url}`);
+    }
+    
+    setIsLoading(true);
+    setErrorMessage(null);
+    
+    try {
+      // 1. 调用爬虫API - 与基本生成相同
+      const crawlResponse = await fetch('http://localhost:5000/api/crawl', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+      
+      if (!crawlResponse.ok) {
+        const errorData = await crawlResponse.json();
+        throw new Error(errorData.message || '爬取页面失败');
+      }
+      
+      const crawlData = await crawlResponse.json();
+      
+      // 2. 调用高级内容处理API
+      const extractResponse = await fetch('http://localhost:5000/api/extract-advanced', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          content: crawlData.content,
+          title: crawlData.title,
+          originalUrl: url, // 传递原始URL，以备后端需要进一步抓取HTML
+          structuredContent: crawlData.structuredContent // 传递爬虫获得的结构化内容
+        }),
+      });
+      
+      if (!extractResponse.ok) {
+        const errorData = await extractResponse.json();
+        throw new Error(errorData.message || '高级处理内容失败');
+      }
+      
+      const { nodes, edges } = await extractResponse.json();
+      
+      // 3. 更新流程图
+      setNodes(nodes);
+      setEdges(edges);
+      
+      // 4. 重新居中视图
+      if (rfInstance) {
+        setTimeout(() => {
+          rfInstance.fitView({ padding: 0.2 });
+        }, 100);
+      }
+      
+    } catch (error) {
+      console.error('从URL生成高级流程图时出错:', error);
+      setErrorMessage(error instanceof Error ? error.message : '未知错误');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
       <div className="flex items-center justify-between">
@@ -212,14 +283,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
               disabled={isLoading}
             />
             <button
-              onClick={handleGenerateFromUrl}
+              onClick={handleAdvancedGenerateFromUrl}
               disabled={isLoading}
-              className={`px-3 py-1 rounded-r flex items-center ${
+              className={`px-3 py-1 flex items-center ${
                 isLoading
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-500 hover:bg-blue-600'
-              } text-white transition-colors`}
-              title="从URL生成流程图"
+                  : 'bg-purple-500 hover:bg-purple-600'
+              } text-white transition-colors rounded-none`}
+              title="从URL生成高级结构化流程图"
             >
               {isLoading ? (
                 <>
@@ -231,8 +302,31 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </>
               ) : (
                 <>
+                  <svg className="w-4 h-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                    <path d="M2 12l10 5 10-5"></path>
+                  </svg>
+                  <span>结构生成</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleGenerateFromUrl}
+              disabled={isLoading}
+              className={`px-3 py-1 rounded-r flex items-center ${
+                isLoading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-500 hover:bg-blue-600'
+              } text-white transition-colors`}
+              title="从URL生成基本流程图 (用于AI处理)"
+            >
+              {isLoading ? (
+                <span>生成中...</span>
+              ) : (
+                <>
                   <GlobeAltIcon className="w-4 h-4 mr-1" />
-                  <span>生成</span>
+                  <span>AI处理</span>
                 </>
               )}
             </button>

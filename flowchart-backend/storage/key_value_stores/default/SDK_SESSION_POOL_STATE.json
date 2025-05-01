@@ -3,7 +3,7 @@
   "retiredSessionsCount": 0,
   "sessions": [
     {
-      "id": "session_RqZmc3qcfO",
+      "id": "session_bm5E5aUoCL",
       "cookieJar": {
         "version": "tough-cookie@5.1.2",
         "storeType": "MemoryCookieStore",
@@ -16,14 +16,14 @@
       "userData": {},
       "maxErrorScore": 3,
       "errorScoreDecrement": 0.5,
-      "expiresAt": "2025-05-01T16:33:17.964Z",
-      "createdAt": "2025-05-01T15:43:17.964Z",
+      "expiresAt": "2025-05-01T17:56:34.309Z",
+      "createdAt": "2025-05-01T17:06:34.309Z",
       "usageCount": 0,
       "maxUsageCount": 50,
       "errorScore": 0
     },
     {
-      "id": "session_hR7NeX3Wwo",
+      "id": "session_DTvusIIOQI",
       "cookieJar": {
         "version": "tough-cookie@5.1.2",
         "storeType": "MemoryCookieStore",
@@ -31,13 +31,25 @@
         "enableLooseMode": false,
         "allowSpecialUseDomain": true,
         "prefixSecurity": "silent",
-        "cookies": []
+        "cookies": [
+          {
+            "key": "JSESSIONID",
+            "value": "FA803AF0A0A847EBAF671FDDD7767BE8",
+            "expires": "2025-05-01T17:56:38.676Z",
+            "domain": "news.ntu.edu.cn",
+            "path": "/",
+            "httpOnly": true,
+            "hostOnly": true,
+            "creation": "2025-05-01T17:06:38.677Z",
+            "lastAccessed": "2025-05-01T17:06:38.677Z"
+          }
+        ]
       },
       "userData": {},
       "maxErrorScore": 3,
       "errorScoreDecrement": 0.5,
-      "expiresAt": "2025-05-01T16:33:17.966Z",
-      "createdAt": "2025-05-01T15:43:17.966Z",
+      "expiresAt": "2025-05-01T17:56:34.310Z",
+      "createdAt": "2025-05-01T17:06:34.310Z",
       "usageCount": 1,
       "maxUsageCount": 50,
       "errorScore": 0
