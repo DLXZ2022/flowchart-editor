@@ -15,7 +15,6 @@ import {
   OnConnect,
   NodeMouseHandler,
   ReactFlowInstance,
-  Viewport,
   SelectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -32,7 +31,7 @@ import ExportImageButton from './components/ExportImageButton';
 import SearchBox from './components/SearchBox';
 
 // 工具函数和类型
-import { NodeDataType, EdgeData, FlowchartNode, FlowchartEdge } from './types';
+import type { NodeDataType, FlowchartNode, FlowchartEdge } from './types';
 import { checkForCyclicConnection } from './utils/graphValidation';
 import { getLayoutedElements } from './utils/autoLayout';
 import { 
@@ -41,6 +40,7 @@ import {
   clearFlowchartFromLocalStorage,
   hasStoredFlowchart 
 } from './utils/storageUtils';
+import { createNewNode } from './utils/nodeUtils';
 
 // 初始化深色模式
 const initializeTheme = () => {
@@ -66,9 +66,6 @@ const initializeTheme = () => {
 
 // 在应用启动时初始化主题
 initializeTheme();
-
-// 生成唯一ID的辅助函数
-const getId = (): string => `node_${Math.random().toString(36).substr(2, 9)}`;
 
 // 定义不同节点类型
 const nodeTypes: NodeTypes = {
@@ -111,7 +108,6 @@ const initialNodes: FlowchartNode[] = [
       url: 'https://example.com', 
       type: 'typeA',
       description: '这是网站的主页，包含网站的基本介绍和导航',
-      flipped: false,
       handleCounts: { top: 1, bottom: 1, left: 1, right: 1 }
     },
   },
@@ -124,7 +120,6 @@ const initialNodes: FlowchartNode[] = [
       url: 'https://example.com/products', 
       type: 'typeB',
       description: '展示公司的主要产品和服务内容',
-      flipped: false,
       handleCounts: { top: 1, bottom: 1, left: 1, right: 1 }
     },
   },
@@ -322,34 +317,23 @@ const FlowchartEditor: React.FC = () => {
     }
   }, [saveToHistory, isHistoryChanging]);
 
-  // 添加新节点时记录历史
-  const onAddNode = useCallback(
-    (type: NodeDataType['type']) => {
-      const id = getId();
-      const newNode: FlowchartNode = {
-        id,
-        type: 'custom',
-        position: {
-          x: Math.random() * 300 + 50,
-          y: Math.random() * 300 + 50,
-        },
-        data: {
-          label: `节点 ${id.slice(5, 8)}`,
-          type: type,
-          url: '',
-          description: '请右键点击添加描述',
-          flipped: false,
-          handleCounts: { top: 1, bottom: 1, left: 1, right: 1 } // 默认每边1个连接点
-        }
-      };
-      
-      setNodes(nds => [...nds, newNode]);
-      
-      // 添加节点后保存历史
-      setTimeout(saveHistoryAfterChange, 50);
-    },
-    [setNodes, saveHistoryAfterChange]
-  );
+  // 添加新节点
+  const handleAddNode = useCallback((type: NodeDataType['type']) => {
+    // 创建一个随机位置，或者基于视图中心位置
+    const position = {
+      x: Math.random() * 400,
+      y: Math.random() * 400,
+    };
+    
+    // 使用工具函数创建新节点
+    const newNode = createNewNode(type, position);
+    
+    setNodes((nds) => [...nds, newNode]);
+    setLastSavedTime('有未保存的更改');
+    
+    // 保存历史
+    setTimeout(saveHistoryAfterChange, 50);
+  }, [setNodes, setLastSavedTime, saveHistoryAfterChange]);
 
   // 处理删除选中元素
   const deleteSelectedElements = useCallback(() => {
@@ -505,44 +489,17 @@ const FlowchartEditor: React.FC = () => {
     setPropertiesOpen(false);
   }, []);
   
-  // 节点右键菜单处理
-  const onNodeContextMenu: NodeMouseHandler = useCallback(
-    (event, node) => {
-      // 防止默认的上下文菜单
-      event.preventDefault();
-      
-      // 切换节点的编辑状态（翻转）
-      const data = node.data as NodeDataType;
-      
-      setNodes(ns =>
-        ns.map(n => {
-          if (n.id === node.id) {
-            return {
-              ...n,
-              data: {
-                ...n.data,
-                flipped: !data.flipped,
-              },
-            };
-          }
-          return n;
-        })
-      );
-      
-      // 如果打开了属性面板，关闭它
-      if (propertiesOpen && selectedNodeId === node.id) {
-        setPropertiesOpen(false);
-      }
-      
-      // 更新lastSavedTime状态
-      setLastSavedTime('有未保存的更改');
-      
-      // 保存到历史记录
-      setTimeout(saveHistoryAfterChange, 50);
-    },
-    [setNodes, setLastSavedTime, saveHistoryAfterChange, propertiesOpen, selectedNodeId]
-  );
-  
+  // 处理节点选择
+  const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: {
+    nodes: Array<any>;
+    edges: Array<any>;
+  }) => {
+    setSelectedElements({
+      nodes: selectedNodes.map((node: any) => node.id),
+      edges: selectedEdges.map((edge: any) => edge.id)
+    });
+  }, []);
+
   // 默认连接验证
   const isValidConnection = useCallback(
     (connection: Connection) => {
@@ -559,17 +516,6 @@ const FlowchartEditor: React.FC = () => {
     },
     [edges]
   );
-
-  // 处理节点选择
-  const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: {
-    nodes: Array<any>;
-    edges: Array<any>;
-  }) => {
-    setSelectedElements({
-      nodes: selectedNodes.map((node: any) => node.id),
-      edges: selectedEdges.map((edge: any) => edge.id)
-    });
-  }, []);
 
   // 添加键盘事件处理器
   useEffect(() => {
@@ -680,10 +626,21 @@ const FlowchartEditor: React.FC = () => {
     }
   }, [highlightedNodeId, setNodes]);
 
+  // 删除节点
+  const deleteSelectedNode = useCallback(() => {
+    if (selectedNodeId) {
+      setNodes(nodes => nodes.filter(n => n.id !== selectedNodeId));
+      setSelectedNodeId(null);
+      setPropertiesOpen(false);
+      setLastSavedTime('有未保存的更改');
+      setTimeout(saveHistoryAfterChange, 50);
+    }
+  }, [selectedNodeId, setNodes, setSelectedNodeId, setPropertiesOpen, setLastSavedTime, saveHistoryAfterChange]);
+
   return (
     <div className="w-full h-screen">
       <Toolbar
-        onAddNode={onAddNode}
+        onAddNode={handleAddNode}
         onLayout={onLayout}
         rfInstance={reactFlowInstance}
         setNodes={setNodes as any}
@@ -717,7 +674,6 @@ const FlowchartEditor: React.FC = () => {
           onNodeClick={onNodeClick as any}
           selectionOnDrag={false}
           selectionMode={SelectionMode.Partial}
-          onNodeContextMenu={onNodeContextMenu as any}
           proOptions={{ hideAttribution: true }}
           selectNodesOnDrag={false}
           minZoom={0.1}
@@ -773,6 +729,7 @@ const FlowchartEditor: React.FC = () => {
           onClose={closeProperties}
           selectedNode={selectedNode()}
           onUpdateNodeData={updateNodeData}
+          onDeleteNode={deleteSelectedNode}
         />
       </div>
     </div>

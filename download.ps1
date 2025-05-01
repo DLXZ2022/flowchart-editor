@@ -90,15 +90,15 @@ try {
 }
 
 # 3. Install Backend Dependencies (flowchart-backend Directory)
-Write-Info "正在安装后端依赖 (npm install)..."
+Write-Info "正在安装后端依赖 (yarn install)..."
 try {
-    npm install *>&1 | Out-String # Capture all output
+    yarn install *>&1 | Out-String
     if ($LASTEXITCODE -ne 0) {
-        throw "npm install failed with exit code $LASTEXITCODE"
+        throw "yarn install failed with exit code $LASTEXITCODE"
     }
     Write-Info "后端依赖安装完成。"
 } catch {
-    Write-ErrorAndExit "后端依赖安装失败 (npm install)。请检查上面的错误信息。 Error: $($_.Exception.Message)"
+    Write-ErrorAndExit "后端依赖安装失败 (yarn install)。请检查上面的错误信息。 Error: $($_.Exception.Message)"
 }
 
 # 4. Install Playwright Browsers (flowchart-backend Directory)

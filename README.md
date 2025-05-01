@@ -15,14 +15,20 @@
     - 支持画布平移和缩放。
     - 悬停节点可显示详细信息 Tooltip (使用 `NodeToolbar` 实现，定位更精确)。
 - ✏️ **灵活的编辑功能**: 
-    - **节点编辑**: 右键点击节点可翻转卡片，编辑其标签、目标URL（编辑完成后节点可点击跳转）和详细描述，以及各方向的连接点数量 (0-4)。
+    - **节点编辑**: 通过右侧的 **属性面板** 编辑节点的标签、目标URL（编辑完成后节点可点击跳转）、详细描述、节点类型以及各方向的连接点数量 (0-4)。
+    - **快速标签编辑**: **双击** 节点标签可以直接进行编辑。
     - **连接线编辑**: 双击连接线可添加或修改标签。
 - ✨ **自定义节点/边**: 
     - 支持多种预设节点类型（蓝、绿、黄），易于区分。
-    - 自定义渲染的节点和边提供了独特的交互体验。
+    - 自定义渲染的节点（标题突出，内容摘要显示）和边提供了独特的交互体验。
 - 🌐 **Web内容生成**:
-    - **结构化生成 (默认)**: 在工具栏输入 URL，点击 **"结构生成"** 按钮。后端将爬取网页内容，尝试提取结构化信息 (如标题、段落、列表)，并生成更具逻辑性和可读性的流程图。
-    - **文本提取**: 在工具栏输入 URL，点击 **"文本提取"** 按钮。后端将爬取网页并提取主要文本内容，生成一个简单的节点包含所有文本 (此功能主要用于未来集成 AI 进行内容处理)。
+    - **结构生成 (默认)**: 在工具栏输入 URL，点击 **"结构生成"** 按钮。后端将：
+        1.  爬取网页内容。
+        2.  使用 Readability.js 清理并提取主体内容和基本结构 (HTML)。
+        3.  调用 `/api/extract-advanced` 接口，该接口分析提取出的结构信息，生成更具逻辑层次的流程图节点和边。
+    - **文本提取**: 在工具栏输入 URL，点击 **"文本提取"** 按钮。后端将：
+        1.  爬取网页内容 (同上，使用 Readability)。
+        2.  调用 `/api/extract` 接口，该接口主要使用 Readability 提取出的纯文本内容，进行简单的段落分割来生成流程图节点和顺序连接。 (此功能主要用于对比或未来集成 AI 进行内容处理)。
 - 📐 **智能布局与连接**: 
     - 一键**自动布局**功能 (基于ELKjs)，优化复杂图形的排列。
     - 自动阻止创建循环连接，保证流程逻辑的有效性。
@@ -44,15 +50,15 @@
 - **样式**: TailwindCSS
 - **数据验证**: Zod
 - **状态管理**: React Hooks (useState, useCallback, useEffect, useRef), ReactFlow Hooks
-- **Web爬虫**: Crawlee (PlaywrightCrawler)
+- **Web爬虫与内容提取**: Crawlee (PlaywrightCrawler), @mozilla/readability, jsdom
 - **后端**: Node.js, Express
-- **包管理器**: 前端使用 `yarn`, 后端使用 `npm`
+- **包管理器**: Yarn (v1.x) (项目已统一使用 Yarn)
 
 ## 环境要求
 
-- **通用**: Git, [Node.js](https://nodejs.org/) (v16+), `npm` (v8+), `yarn` (v1.x)
-- **Linux/Ubuntu**: 可能需要安装 `build-essential` 或类似包，用于编译某些 npm 依赖。
-- **Windows**: 确保 WMI 服务正常且 `wmic.exe` 可访问 (通常需要 `C:\Windows\System32\wbem` 在 PATH 中)。
+- **通用**: Git, [Node.js](https://nodejs.org/) (v16+), `yarn` (v1.x) (请确保已通过 `npm install --global yarn` 安装)
+- **Linux/Ubuntu**: 可能需要安装 Playwright 所需的系统依赖（运行安装脚本时通常会有提示）。
+- **Windows**: 确保 WMI 服务正常且 `wmic.exe` 可访问 (通常需要 `C:\Windows\System32\wbem` 在 PATH 中)。Playwright 可能也需要特定的系统依赖。
 
 ## 小白入门教程 (Step-by-Step Guide for Beginners)
 
@@ -67,14 +73,14 @@
     *   下载适合您操作系统 (Windows, macOS, Linux) 的安装程序并运行。
     *   安装过程中，通常保持默认选项即可。
 
-2.  **Node.js (包含 npm)**: 这是运行项目代码的基础环境 (Node.js) 和一个包管理器 (npm)，用于下载项目所需的各种库文件。
+2.  **Node.js (包含 npm)**: 这是运行项目代码的基础环境 (Node.js) 和一个包管理器 (npm)，用于安装 Yarn。
     *   访问 [https://nodejs.org/](https://nodejs.org/)
     *   推荐下载 **LTS (长期支持)** 版本，它更稳定。
     *   下载适合您操作系统的安装程序并运行。
     *   安装过程中，确保勾选了将 Node.js 和 npm 添加到系统路径 (PATH) 的选项 (通常默认勾选)。
     *   安装完成后，您可以打开命令行工具 (见下一步) 输入 `node -v` 和 `npm -v`，如果能看到版本号输出，则表示安装成功。
 
-3.  **Yarn**: 这是前端项目使用的另一个包管理器。
+3.  **Yarn**: 这是本项目 **统一使用的包管理器**。
     *   安装完 Node.js 和 npm 后，在命令行中运行：
         ```bash
         npm install --global yarn
@@ -113,19 +119,19 @@
 
 **第三步：安装项目依赖**
 
-项目代码依赖许多第三方库才能运行。我们需要使用统一的命令来安装前后端依赖和浏览器。
+项目代码依赖许多第三方库才能运行。我们需要使用 Yarn 来安装它们。
 
-1.  **运行统一安装命令**: 确保您当前在项目根目录 (`flowchart-editor`) 下。在命令行中运行：
+1.  **运行统一安装命令**: 确保您当前在项目根目录 (`flowchart-editor`) 下。在命令行中运行以下 **推荐的命令**：
     ```bash
-    yarn download
+    yarn setup
     ```
-    或者，如果您更习惯使用 npm：
+    或者，您也可以使用另一个脚本：
     ```bash
-    npm run download
+    yarn download 
     ```
-    这个命令会自动检测您的操作系统，然后执行相应的步骤：
+    这两个命令都会执行类似的操作：
     *   安装前端依赖 (使用 Yarn)
-    *   安装后端依赖 (使用 npm)
+    *   安装后端依赖 (使用 Yarn)
     *   安装 Playwright 浏览器
     请耐心等待所有步骤完成，这可能需要几分钟时间，取决于您的网络速度。
 
@@ -134,36 +140,33 @@
 这个项目包含两个主要部分：前端和后端。我们需要同时启动它们。
 
 1.  **启动后端服务**:
-    *   确保您仍在 `flowchart-backend` 目录下。
-    *   在命令行中运行：
+    *   确保您仍在项目根目录 (`flowchart-editor`) 下。
+    *   在命令行中运行（使用我们定义的脚本）：
         ```bash
-        npm start
-        ```
-        或者，如果开发者模式可用 (查看 `flowchart-backend/package.json` 中的 `scripts`)：
-        ```bash
-        npm run dev
+        yarn dev:backend 
         ```
     *   您会看到后端服务启动的日志信息。**保持这个命令行窗口打开**，服务需要持续运行。
 
 2.  **启动前端服务**:
     *   **打开一个新的命令行窗口** (不要关闭后端的窗口)。
-    *   使用 `cd` 命令导航回项目根目录：
+    *   确保您在这个新窗口中也处于项目根目录 (`flowchart-editor`) 下。
+    *   运行：
         ```bash
-        # 示例：如果当前在 flowchart-backend，需要先返回上一级
-        cd .. 
-        # 现在应该在 flowchart-editor 根目录
-        ```
-    *   在项目根目录 (`flowchart-editor`)下，运行：
-        ```bash
-        yarn dev
+        yarn dev:frontend
         ```
     *   您会看到前端开发服务器 (Vite) 启动的日志信息，通常会显示一个本地访问地址。**保持这个命令行窗口也打开**。
+
+*或者，您可以使用一个命令同时启动前后端（如果安装了 `concurrently`）：*
+```bash
+yarn start:dev
+```
+*这只需要一个命令行窗口。*
 
 **第五步：访问应用程序**
 
 当两个服务都成功启动后：
 
-1.  查看 **前端** 命令行窗口的输出。
+1.  查看 **前端** 命令行窗口的输出 (或者如果您使用了 `start:dev`，查看那个窗口的输出)。
 2.  您应该会看到类似 `Local: http://localhost:5173/` 这样的地址。这是您可以在浏览器中访问的本地网址。
 3.  打开您的 Web 浏览器 (如 Chrome, Firefox, Edge)。
 4.  在地址栏输入上面看到的地址 (通常是 `http://localhost:5173`) 并回车。
@@ -171,13 +174,13 @@
 
 **遇到问题怎么办？(Troubleshooting)**
 
-*   **依赖安装失败 (`yarn download` 或 `npm run download`)**: 仔细查看命令行输出的详细错误信息。检查您的网络连接是否正常。确认 Node.js, npm, 和 yarn 都已正确安装并添加到系统路径。可能缺少某些系统依赖 (特别是 Playwright 浏览器安装步骤)。
-*   **脚本执行权限问题 (Linux/macOS)**: 如果 `yarn download` 或 `npm run download` 内部调用 `download.sh` 时出现权限错误，请尝试手动给 `download.sh` 添加执行权限：`chmod +x download.sh`，然后再次运行下载命令。
-*   **脚本执行权限问题 (PowerShell)**: 如果 `yarn download` 或 `npm run download` 内部调用 `download.ps1` 时遇到执行策略错误，它会尝试使用 `-ExecutionPolicy Bypass` 绕过。如果仍然失败，您可能需要以管理员身份打开 PowerShell 并调整执行策略 (请谨慎操作并了解其含义)。
+*   **依赖安装失败 (`yarn setup` 或 `yarn download`)**: 仔细查看命令行输出的详细错误信息。检查您的网络连接是否正常。确认 Node.js 和 yarn 都已正确安装并添加到系统路径。可能缺少某些系统依赖 (特别是 Playwright 浏览器安装步骤)。
+*   **脚本执行权限问题 (Linux/macOS)**: 如果 `yarn download` 内部调用 `download.sh` 时出现权限错误，请尝试手动给 `download.sh` 添加执行权限：`chmod +x download.sh`，然后再次运行下载命令。
+*   **脚本执行权限问题 (PowerShell)**: 如果 `yarn download` 内部调用 `download.ps1` 时遇到执行策略错误，它会尝试使用 `-ExecutionPolicy Bypass` 绕过。如果仍然失败，您可能需要以管理员身份打开 PowerShell 并调整执行策略 (请谨慎操作并了解其含义)。
 *   **Playwright 浏览器安装失败**: 确保网络连接良好，系统有足够权限下载和安装。查看 Playwright 的官方文档获取特定操作系统的故障排除步骤。
 *   **`wmic.exe` 错误 (Windows)**: 尝试以管理员身份运行 `sfc /scannow` 并重启，或运行 `dism` 命令安装。
 *   **端口冲突**: 后端默认使用 5000 端口，前端默认使用 5173 端口。如果这些端口已被其他程序占用，启动会失败。您需要关闭占用端口的程序或修改项目配置 (较复杂)。
-*   **爬取功能失败**: 确保 Playwright 浏览器已成功安装 (通过 `yarn download` 或 `npm run download`)。检查 **后端** 命令行窗口是否有报错信息。确认输入的 URL 是可访问的。
+*   **爬取功能失败**: 确保 Playwright 浏览器已成功安装 (通过 `yarn setup` 或 `yarn download`)。检查 **后端** 命令行窗口是否有报错信息。确认输入的 URL 是可访问的。
 
 **下一步**
 
@@ -195,23 +198,23 @@ cd flowchart-editor
 ### 2. 安装依赖
 
 ```bash
-# 在项目根目录运行统一安装命令
-yarn download
-# 或者 npm run download
+# 在项目根目录运行统一安装命令 (推荐)
+yarn setup
+# 或者 yarn download
 ```
 
-### 3. 运行应用 (需要两个终端)
+### 3. 运行应用
 
-*   **终端 1 (启动后端):**
-    ```bash
-    cd flowchart-backend
-    npm start  # 或者 npm run dev
-    ```
-*   **终端 2 (启动前端):**
-    ```bash
-    # 确保在项目根目录
-    yarn dev
-    ```
+```bash
+# 使用一个终端同时启动前后端 (推荐)
+yarn start:dev
+
+# 或者，分别在两个终端中启动：
+# 终端 1 (启动后端):
+# yarn dev:backend
+# 终端 2 (启动前端):
+# yarn dev:frontend
+```
 
 ### 4. 访问应用
 
@@ -227,23 +230,32 @@ yarn download
 ```
 flowchart-editor/
 ├── flowchart-backend/       # 后端 Node.js/Express 应用
-│   ├── src/                 # 后端源码 (爬虫逻辑等)
+│   ├── src/                 # 后端源码
+│   │   ├── crawler/         # 爬虫与提取逻辑
+│   │   │   └── extractionUtils.js # 内容提取工具 (Readability等)
+│   │   ├── server.js        # Express 服务器与 API 路由
+│   │   └── index.ts         # (可能存在的 TS 入口或旧文件)
 │   ├── storage/             # Crawlee 存储目录
-│   ├── package.json         # 后端 npm 依赖
-│   └── package-lock.json    # 后端 npm 锁文件
+│   ├── package.json         # 后端 Yarn 依赖
+│   └── yarn.lock            # 后端 Yarn 锁文件
 │   └── tsconfig.json        # 后端 TS 配置
 ├── src/                     # 前端 React 应用源码
 │   ├── components/          # React 组件
-│   │   ├── CustomNode.tsx   # 自定义节点实现 (含编辑逻辑, Tooltip)
-│   │   ├── CustomEdge.tsx   # 自定义边实现 (含标签编辑)
-│   │   └── Toolbar.tsx      # 顶部工具栏 UI 与交互
+│   │   ├── CustomNode.tsx   # 自定义节点实现 (显示, 交互)
+│   │   ├── CustomEdge.tsx   # 自定义边实现 (标签编辑)
+│   │   ├── Toolbar.tsx      # 顶部工具栏 UI 与交互
+│   │   ├── PropertiesSidebar.tsx # 节点属性编辑侧边栏
+│   │   └── ...              # 其他组件 (Sidebar, Tooltip, etc.)
 │   ├── types/               # TypeScript 类型定义
-│   ├── utils/               # 工具函数
-│   └── App.tsx              # 主应用组件
+│   ├── utils/               # 工具函数 (节点、布局、存储等)
+│   └── App.tsx              # 主应用组件 (ReactFlow 核心逻辑)
 │   └── main.tsx             # 应用入口
 ├── public/                  # 静态资源
-├── package.json             # 前端 yarn 依赖
-├── yarn.lock                # 前端 yarn 锁文件
+├── package.json             # 前端 Yarn 依赖
+├── yarn.lock                # 前端 Yarn 锁文件
+├── download-deps.js         # 跨平台依赖下载启动器
+├── download.ps1             # Windows 依赖下载脚本
+├── download.sh              # Linux/macOS 依赖下载脚本
 ├── vite.config.ts           # Vite 配置
 ├── tsconfig.json            # 前端 TS 配置
 ├── tailwind.config.js       # Tailwind CSS 配置

@@ -51,10 +51,10 @@ else
 fi
 
 # 3. 安装后端依赖 (flowchart-backend 目录)
-print_info "正在安装后端依赖 (npm install)..."
-npm install
+print_info "正在安装后端依赖 (yarn install)..."
+yarn install
 if [ $? -ne 0 ]; then
-  print_error "后端依赖安装失败 (npm install)。请检查上面的错误信息。"
+  print_error "后端依赖安装失败 (yarn install)。请检查上面的错误信息。"
 fi
 print_info "后端依赖安装完成。"
 

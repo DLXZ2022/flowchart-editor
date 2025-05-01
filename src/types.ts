@@ -4,19 +4,20 @@ import { Node, Edge, Viewport } from '@xyflow/react';
 export type NodeTypeEnum = 'typeA' | 'typeB' | 'typeC';
 
 // 节点数据类型
-export interface NodeDataType {
+export type NodeDataType = {
   label: string;
+  type: NodeTypeEnum; // 'typeA' | 'typeB' | 'typeC'
   url?: string;
   description?: string;
-  comments?: string;
-  type: NodeTypeEnum;
-  flipped?: boolean;
   handleCounts?: {
-    top?: number;
-    bottom?: number;
-    left?: number;
-    right?: number;
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
   };
+  selected?: boolean;
+  isEditing?: boolean;
+  comments?: string;
   // 新增：可选的元数据字段，用于更细致的内容分类
   metadata?: {
     source?: string;
@@ -25,7 +26,7 @@ export interface NodeDataType {
     keywords?: string[];
   };
   [key: string]: unknown;
-}
+};
 
 // 边数据类型
 export interface EdgeData {

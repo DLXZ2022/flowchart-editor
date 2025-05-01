@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { ReactFlowInstance } from '@xyflow/react';
-import { NodeDataType } from '../types';
+import { ReactFlowInstance, Node } from '@xyflow/react';
+import type { NodeDataType } from '../types';
 
 interface SearchResult {
   id: string;
@@ -96,7 +96,8 @@ const SearchBox: React.FC<SearchBoxProps> = ({ rfInstance, onFocusNode, classNam
     const handleClickOutside = (event: MouseEvent) => {
       if (
         inputRef.current && 
-        !inputRef.current.contains(event.target as Node) &&
+        event.target instanceof globalThis.Node &&
+        !inputRef.current.contains(event.target) &&
         !(event.target as HTMLElement).closest('.search-results')
       ) {
         setResults([]);

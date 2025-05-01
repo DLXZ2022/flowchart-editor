@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position, useReactFlow, NodeToolbar } from '@xyflow/react';
 import { z } from 'zod';
-import { NodeDataType } from '../types';
+import type { NodeDataType } from '../types';
 import NodeTooltip from './NodeTooltip';
 import NodeTypeIcon from './NodeTypeIcon';
 
 // 添加链接图标
-import { LinkIcon } from '@heroicons/react/24/outline';
+import { LinkIcon, PencilIcon } from '@heroicons/react/24/outline';
 
 // URL验证schema
 const urlSchema = z.string().url({ message: "无效的 URL" });
@@ -18,18 +18,27 @@ const nodeTypeStyles = {
     accent: 'border-l-4 border-l-blue-500',
     bg: 'bg-blue-50 dark:bg-blue-900/20',
     icon: 'text-blue-600 dark:text-blue-400',
+    hoverBg: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+    activeBg: 'active:bg-blue-200 dark:active:bg-blue-900/40',
+    shadowHover: 'hover:shadow-md hover:shadow-blue-200/50 dark:hover:shadow-blue-900/30',
   },
   typeB: {
     border: 'border-green-500',
     accent: 'border-l-4 border-l-green-500',
     bg: 'bg-green-50 dark:bg-green-900/20',
     icon: 'text-green-600 dark:text-green-400',
+    hoverBg: 'hover:bg-green-100 dark:hover:bg-green-900/30',
+    activeBg: 'active:bg-green-200 dark:active:bg-green-900/40',
+    shadowHover: 'hover:shadow-md hover:shadow-green-200/50 dark:hover:shadow-green-900/30',
   },
   typeC: {
     border: 'border-yellow-500',
     accent: 'border-l-4 border-l-yellow-500',
     bg: 'bg-yellow-50 dark:bg-yellow-900/20',
     icon: 'text-yellow-600 dark:text-yellow-400',
+    hoverBg: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
+    activeBg: 'active:bg-yellow-200 dark:active:bg-yellow-900/40',
+    shadowHover: 'hover:shadow-md hover:shadow-yellow-200/50 dark:hover:shadow-yellow-900/30',
   },
 } as const;
 
@@ -40,20 +49,29 @@ type CustomNodeProps = {
   id: string;
   data: NodeDataType;
   isConnectable: boolean;
+  selected?: boolean;
 };
 
-const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
+const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable, selected }) => {
   const { setNodes } = useReactFlow();
   const [url, setUrl] = useState(data.url || '');
   const [label, setLabel] = useState(data.label || '');
   const [description, setDescription] = useState(data.description || '');
   const [urlError, setUrlError] = useState<string | null>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   
   // 节点悬停状态
   const [isHovering, setIsHovering] = useState(false);
+  
+  // 添加内部编辑状态
+  const [isEditing, setIsEditing] = useState(false);
+  
   // 计时器，用于延迟显示tooltip
   const hoverTimerRef = useRef<number | null>(null);
+  
+  // 动画状态
+  const [isAnimating, setIsAnimating] = useState(false);
   
   // 为连接点数量添加状态
   const [handleCounts, setHandleCounts] = useState({
@@ -63,8 +81,12 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
     right: data.handleCounts?.right ?? 1
   });
   
-  // 获取翻转状态
-  const flipped = !!data.flipped;
+  // 当使用外部编辑属性(isEditing)时，保持内部状态同步
+  useEffect(() => {
+    if (data.isEditing !== undefined) {
+      setIsEditing(data.isEditing);
+    }
+  }, [data.isEditing]);
 
   // 更新节点数据
   const updateNodeData = useCallback((updates: Partial<NodeDataType>) => {
@@ -82,11 +104,6 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
         return node;
       })
     );
-  }, [id, setNodes]);
-
-  // 删除节点
-  const deleteNode = useCallback(() => {
-    setNodes((nds) => nds.filter((node) => node.id !== id));
   }, [id, setNodes]);
 
   // 处理URL变更
@@ -171,10 +188,46 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
     };
   }, []);
 
+  // 播放动画效果
+  const playAnimation = useCallback(() => {
+    setIsAnimating(true);
+    setTimeout(() => setIsAnimating(false), 500);
+  }, []);
+  
+  // 处理双击快速编辑标签
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    setIsEditing(true);
+    updateNodeData({ isEditing: true });
+    
+    // 确保在下一个渲染周期后聚焦输入框
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }, 10);
+  }, [updateNodeData]);
+  
+  // 标签编辑完成
+  const handleLabelEditFinish = useCallback(() => {
+    setIsEditing(false);
+    updateNodeData({ isEditing: false });
+  }, [updateNodeData]);
+  
+  // 处理键盘按键
+  const handleLabelKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleLabelEditFinish();
+    } else if (e.key === 'Escape') {
+      handleLabelEditFinish();
+    }
+  }, [handleLabelEditFinish]);
+
   // 生成连接点列表
   const renderHandles = () => {
-    if (flipped) return null; // 在编辑模式下不显示连接点
-    
     // 获取实际连接点数量（默认为1）
     const counts = {
       top: data.handleCounts?.top ?? 1,
@@ -195,7 +248,7 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
             id={`top-${i}-target`}
             position={Position.Top}
             isConnectable={isConnectable}
-            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full hover:bg-gray-300 hover:border-gray-500 transition-all"
             style={{ left: `${percentage}%`, zIndex: 10 }}
           />
           <Handle
@@ -220,7 +273,7 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
             id={`bottom-${i}-source`}
             position={Position.Bottom}
             isConnectable={isConnectable}
-            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full hover:bg-gray-300 hover:border-gray-500 transition-all"
             style={{ left: `${percentage}%`, zIndex: 10 }}
           />
           <Handle
@@ -245,7 +298,7 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
             id={`left-${i}-target`}
             position={Position.Left}
             isConnectable={isConnectable}
-            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full hover:bg-gray-300 hover:border-gray-500 transition-all"
             style={{ top: `${percentage}%`, zIndex: 10 }}
           />
           <Handle
@@ -270,7 +323,7 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
             id={`right-${i}-source`}
             position={Position.Right}
             isConnectable={isConnectable}
-            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full"
+            className="w-4 h-4 bg-gray-200 border border-gray-400 rounded-full hover:bg-gray-300 hover:border-gray-500 transition-all"
             style={{ top: `${percentage}%`, zIndex: 10 }}
           />
           <Handle
@@ -288,187 +341,96 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
     return handles;
   };
 
-  // 渲染
-  if (flipped) {
-    // 编辑模式
-    return (
-      <div className="p-4 border-2 rounded-lg shadow-md bg-white dark:bg-gray-800 dark:border-gray-700 w-[300px]">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">编辑节点</h3>
-        
-        {/* 标签输入 */}
-        <div className="mb-4">
-          <label htmlFor="node-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            标签 <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="node-label"
-            type="text"
-            value={label}
-            onChange={handleLabelChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            placeholder="节点标签"
-            required
-          />
-        </div>
-        
-        {/* URL输入 */}
-        <div className="mb-4">
-          <label htmlFor="node-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            URL
-          </label>
-          <input
-            id="node-url"
-            type="text"
-            value={url}
-            onChange={handleUrlChange}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 ${
-              urlError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-            }`}
-            placeholder="https://example.com"
-          />
-          {urlError && (
-            <p className="mt-1 text-sm text-red-500 dark:text-red-400">{urlError}</p>
-          )}
-        </div>
-        
-        {/* 描述输入 */}
-        <div className="mb-4">
-          <label htmlFor="node-desc" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            描述
-          </label>
-          <textarea
-            id="node-desc"
-            value={description}
-            onChange={handleDescriptionChange}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            placeholder="节点描述"
-          />
-        </div>
-        
-        {/* 连接点设置 */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            连接点数量
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400">顶部</label>
-              <input
-                type="number"
-                min="0"
-                max="4"
-                value={handleCounts.top}
-                onChange={(e) => handleCountChange('top', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400">底部</label>
-              <input
-                type="number"
-                min="0"
-                max="4"
-                value={handleCounts.bottom}
-                onChange={(e) => handleCountChange('bottom', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400">左侧</label>
-              <input
-                type="number"
-                min="0"
-                max="4"
-                value={handleCounts.left}
-                onChange={(e) => handleCountChange('left', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400">右侧</label>
-              <input
-                type="number"
-                min="0"
-                max="4"
-                value={handleCounts.right}
-                onChange={(e) => handleCountChange('right', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-            </div>
-          </div>
-        </div>
-        
-        {/* 操作按钮 */}
-        <div className="flex justify-between">
-          <button
-            onClick={() => updateNodeData({ flipped: false })}
-            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
-          >
-            完成
-          </button>
-          <button
-            onClick={deleteNode}
-            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-          >
-            删除
-          </button>
-        </div>
-      </div>
-    );
-  } else {
-    // 正面显示 - 新的简洁设计
-    return (
-      <>
-        {renderHandles()}
-        
-        {/* 使用NodeToolbar组件来显示tooltip，它会自动处理定位问题 */}
-        <NodeToolbar 
-          nodeId={id}
-          isVisible={isHovering}
-          position={Position.Right} // 位置在节点右侧
-          offset={10} // 与节点的距离
-          align="center" // 对齐方式
-          className="z-50"
-        >
-          <NodeTooltip data={data} />
-        </NodeToolbar>
-        
-        <div 
-          ref={nodeRef}
-          className={`border rounded-md shadow-sm ${nodeStyle.border} ${nodeStyle.bg} ${nodeStyle.accent} transition-shadow duration-200 hover:shadow-md min-w-[120px]`}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          {/* 节点主内容 */}
-          <div className="px-3 py-2 flex items-center">
-            {/* 图标 */}
-            <div className={`flex-shrink-0 mr-2 ${nodeStyle.icon}`}>
-              <NodeTypeIcon type={data.type} size={16} />
-            </div>
+  // 正面显示 - 优化视觉设计
+  return (
+    <>
+      {renderHandles()}
+      
+      {/* 使用NodeToolbar组件来显示tooltip，它会自动处理定位问题 */}
+      <NodeToolbar 
+        nodeId={id}
+        isVisible={isHovering}
+        position={Position.Top}
+        className="bg-white dark:bg-gray-800 shadow-lg rounded-md p-1 border dark:border-gray-700 z-50"
+      >
+        <NodeTooltip 
+          data={data}
+        />
+      </NodeToolbar>
+      
+      <div
+        ref={nodeRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onDoubleClick={handleDoubleClick}
+        className={`
+          border rounded-md transition-all duration-200 
+          ${nodeStyle.border} ${selected ? 'shadow-md' : ''} ${nodeStyle.bg} 
+          ${nodeStyle.shadowHover} ${isAnimating ? 'animate-pulse-once' : ''}
+          ${isHovering ? 'scale-105' : ''}
+        `}
+        data-node-id={id}
+      >
+        {/* 标题栏和类型图标 */}
+        <div className={`
+          flex items-center justify-between px-2 py-1.5 border-b ${nodeStyle.border}
+          ${nodeStyle.accent}
+        `}>
+          <div className="flex items-center space-x-2">
+            <NodeTypeIcon type={data.type} size={16} className={nodeStyle.icon} />
             
-            {/* 标题 (短摘要) */}
-            <div className="flex-grow truncate text-sm font-medium text-gray-800 dark:text-gray-200">
-              {data.label ? (
-                data.label.length > 20 ? data.label.substring(0, 20) + '...' : data.label
-              ) : '未命名节点'}
-            </div>
-            
-            {/* URL指示图标 */}
-            {data.url && (
-              <div className="flex-shrink-0 ml-1 text-gray-500 dark:text-gray-400">
-                <LinkIcon className="w-3.5 h-3.5" />
-              </div>
+            {/* 当编辑状态为true时显示输入框 */}
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                onBlur={() => {
+                  updateNodeData({ label });
+                  handleLabelEditFinish();
+                }}
+                onKeyDown={handleLabelKeyDown}
+                className="bg-transparent border-b border-gray-400 focus:border-blue-500 outline-none px-1 py-0.5 text-sm font-medium dark:text-white max-w-[140px]"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="font-medium text-sm truncate max-w-[140px] dark:text-white">
+                {label || "未命名节点"}
+              </span>
             )}
           </div>
           
-          <div className="text-[10px] text-right text-gray-500 dark:text-gray-400 pr-2 pb-1">
-            悬停查看详情
-          </div>
+          {/* 只在有URL时显示链接图标 */}
+          {data.url && (
+            <a 
+              href={data.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className={`p-0.5 rounded ${nodeStyle.hoverBg} ${nodeStyle.activeBg}`}
+              title={data.url}
+            >
+              <LinkIcon className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
+            </a>
+          )}
         </div>
-      </>
-    );
-  }
+        
+        {/* 内容区 */}
+        <div className="px-2 py-1.5 min-w-[180px] min-h-[30px]">
+          {data.description ? (
+            <p className="text-xs text-gray-700 dark:text-gray-300 overflow-hidden text-ellipsis">
+              {data.description.length > 30 ? data.description.substring(0, 30) + '...' : data.description}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+              无节点描述
+            </p>
+          )}
+        </div>
+      </div>
+    </>
+  );
 };
 
-export default CustomNode;
+export default React.memo(CustomNode);

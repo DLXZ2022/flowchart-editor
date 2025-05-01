@@ -3,6 +3,13 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { PlaywrightCrawler } = require('crawlee');
 
+// 导入修改后的工具函数
+const {
+  extractReadableHtml,
+  extractStructuredContentFromHtml, // 注意函数名变化
+  handleError
+} = require('./crawler/extractionUtils');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -31,117 +38,109 @@ app.post('/api/crawl', async (req, res) => {
     
     const crawler = new PlaywrightCrawler({
       headless: true,
-      maxRequestsPerCrawl: 1,
+      // maxRequestsPerCrawl: 1, // <-- 暂时注释掉进行测试
       requestHandlerTimeoutSecs: 120, 
-      navigationTimeoutSecs: 90,     
-      // logLevel: LogLevel.DEBUG, // 保留注释掉，以防需要
+      navigationTimeoutSecs: 120,  // 增加到120秒以处理慢速网站
       
       async requestHandler({ page, request, log }) {
         log.info(`[HANDLER START] Processing page via Crawler: ${request.url}`);
         try {
-          // 注意：这里不再需要 page.goto，因为 requestHandler 被调用时，
-          // Crawlee 通常已经导航到了 request.url 对应的页面。
-          // 我们直接执行等待和评估。
-          
+          // 等待页面加载
           log.info('[HANDLER] Waiting for network idle...');
-          await page.waitForLoadState('networkidle', { timeout: 60000 }); 
-          log.info('[HANDLER] Network is idle.');
+          try {
+            await page.waitForLoadState('networkidle', { timeout: 60000 });
+            log.info('[HANDLER] Network is idle.');
+          } catch (networkIdleError) {
+            // 如果网络空闲超时，尝试继续处理
+            log.warn(`[HANDLER] Network idle timeout, proceeding anyway: ${networkIdleError.message}`);
+          }
 
-          log.info('[HANDLER] Evaluating page content...');
-          const extractedData = await page.evaluate(() => {
-            // 尝试选择文章主体
-            const articleElement = document.querySelector('article') || 
-                                 document.querySelector('main') || 
-                                 document.querySelector('.content') ||
-                                 document.querySelector('.article') ||
-                                 document.body;
-            
-            // 移除脚本、样式、导航等无关内容
-            const elementsToRemove = articleElement.querySelectorAll('script, style, nav, header, footer, aside, iframe, .ads, .navigation, .menu, .sidebar');
-            elementsToRemove.forEach(el => el.remove());
-            
-            // 基本的清理文本（保留段落分隔）
-            const cleanText = (articleElement.textContent || '')
-              .replace(/\s+/g, ' ')
-              .trim();
-              
-            // 获取结构化内容，保留段落、标题等信息
-            const structuredContent = [];
-            // 标题
-            const headers = articleElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            headers.forEach(header => {
-              const level = parseInt(header.tagName.substring(1));
-              const text = header.textContent?.trim();
-              if (text) structuredContent.push({ type: 'header', level, text });
-            });
-            // 段落
-            const paragraphs = articleElement.querySelectorAll('p');
-            paragraphs.forEach(para => {
-              const text = para.textContent?.trim();
-              if (text && text.length > 10) structuredContent.push({ type: 'paragraph', text });
-            });
-            // 列表
-            const lists = articleElement.querySelectorAll('ul, ol');
-            lists.forEach(list => {
-              const items = [];
-              const listItems = list.querySelectorAll('li');
-              listItems.forEach(li => {
-                const text = li.textContent?.trim();
-                if (text) items.push(text);
-              });
-              if (items.length > 0) {
-                structuredContent.push({ type: 'list', items, isordered: list.tagName.toLowerCase() === 'ol' });
-              }
-            });
-            
-            // Fallback if structure is empty
-            if (structuredContent.length === 0) {
-              const allText = cleanText;
-              const splitByNewLine = allText.split(/\n+/);
-              splitByNewLine.forEach(text => {
-                const trimmed = text.trim();
-                if (trimmed.length > 30) {
-                  structuredContent.push({ type: 'paragraph', text: trimmed });
-                }
-              });
-            }
-            
-            return {
-              cleanText,
-              structuredContent
-            };
-          });
-          log.info('[HANDLER] Page evaluation finished.');
-
-          const title = await page.title();
-          log.info(`[HANDLER] Page title: ${title}`);
+          // 如果页面仍在加载，至少等待DOM内容加载
+          log.info('[HANDLER] Ensuring DOM content is loaded...');
+          await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
           
-          log.info('[HANDLER] Assigning crawl result...');
+          // 第1步：获取原始 HTML
+          log.info('[HANDLER] Getting raw HTML content...');
+          const rawHtml = await page.content();
+
+          // 第2步：使用 Readability 提取可读内容
+          log.info('[HANDLER] Extracting readable HTML with Readability...');
+          const readableArticle = await extractReadableHtml(rawHtml, request.url, log);
+
+          if (!readableArticle) {
+             throw new Error('Readability failed to extract content.');
+          }
+
+          // 第3步：(临时) 从清理后的 HTML 提取基本文本和待实现的结构
+          log.info('[HANDLER] Extracting basic content from cleaned HTML...');
+          // 注意这里调用的是 extractStructuredContentFromHtml
+          const { cleanText, structuredContent } = await extractStructuredContentFromHtml(readableArticle.contentHtml, log);
+
+          // 使用 Readability 提取的标题，如果它存在的话，否则回退到页面标题
+          const finalTitle = readableArticle.title || await page.title();
+          log.info(`[HANDLER] Final page title: ${finalTitle}`);
+
+          // 记录统计信息
+          const stats = {
+            readabilityTextLength: readableArticle.textContent.length,
+            finalTextLength: cleanText.length, // 最终文本长度
+            structuredItems: structuredContent.length // 最终结构项数量
+          };
+          log.info(`[HANDLER] Extracted content stats:`, stats);
+          
+          // 返回结果
+          log.info('[HANDLER] Attempting to assign crawl result...');
           crawlResult = {
             url: request.url,
-            title: title,
-            content: extractedData.cleanText,
-            structuredContent: extractedData.structuredContent
+            title: finalTitle,
+            content: cleanText, // 使用从清理后HTML提取的文本
+            structuredContent: structuredContent, // 结构化内容（待下一步完善）
+            stats: stats,
+            // 可以选择性地包含Readability提取的其他信息
+            readabilityExcerpt: readableArticle.excerpt,
+            readabilitySiteName: readableArticle.siteName,
+            // cleanedHtml: readableArticle.contentHtml // (调试时可以取消注释)
           };
-          log.info('[HANDLER] Crawl result assigned.');
+          log.info('[HANDLER] Crawl result successfully assigned.');
 
         } catch (error) {
-          log.error(`[HANDLER ERROR] Error during request handling for ${request.url}: ${error.message}`, { stack: error.stack });
-          handlerError = error; 
+          // 使用更新后的错误处理上下文
+          const formattedError = handleError(error, 'Content extraction with Readability', log);
+          handlerError = new Error(`Extraction error: ${formattedError.message}`);
+          handlerError.details = formattedError;
+          log.error(`[HANDLER ERROR] ${handlerError.message}`);
         }
         log.info(`[HANDLER END] Finished processing page: ${request.url}`);
       },
       
-      failedRequestHandler({ request, log }) {
-         log.error(`[FAILED HANDLER] Request ${request.url} failed too many times or due to navigation error.`);
+      failedRequestHandler({ request, error, log }) {
+         // 使用更新后的错误处理上下文
+         const formattedError = handleError(error, 'Request handling failed', log);
+         log.error(`[FAILED HANDLER] Request ${request.url} failed: ${formattedError.type} - ${formattedError.message}`);
          if (!handlerError) { 
-            handlerError = new Error(`Request failed for ${request.url}, possibly due to navigation or network issues.`);
+            handlerError = new Error(`Request failed for ${request.url}: ${formattedError.message}`);
+            handlerError.details = formattedError;
          } 
       },
     });
-    
-    console.log('[CRAWLER] Attempting to run crawler...');
-    await crawler.run([url]);
+
+    console.log('[CRAWLER] Preparing to run crawler...'); // Log before resetting
+
+    // Explicitly reset result/error variables before this specific run
+    crawlResult = null;
+    handlerError = null;
+
+    // 创建一个带有唯一键的请求对象
+    const uniqueKey = `${url}-${Date.now()}`; // 添加时间戳确保唯一性
+    const requestObject = {
+        url: url,
+        uniqueKey: uniqueKey,
+    };
+    console.log(`[CRAWLER] Created unique request object with key: ${uniqueKey}`);
+
+    console.log('[CRAWLER] Attempting to run crawler with unique request object...');
+    // 传递请求对象数组给 run 方法
+    await crawler.run([requestObject]);
     console.log('[CRAWLER] Crawler run finished.');
     
     // 检查结果和错误 (保持之前的逻辑)
@@ -149,12 +148,16 @@ app.post('/api/crawl', async (req, res) => {
       console.error(`[CRAWL END - Crawler Mode] Failed due to handler error: ${handlerError.message}`);
       return res.status(500).json({
         error: 'Error during page processing',
-        message: handlerError.message || String(handlerError)
+        message: handlerError.message || String(handlerError),
+        details: handlerError.details || {}
       });
     }
     if (!crawlResult) {
       console.error('[CRAWL END - Crawler Mode] Failed: No crawl result obtained and no specific handler error recorded.');
-      return res.status(500).json({ error: 'Failed to crawl the URL', message: 'The crawler finished, but no content was successfully extracted. The target page might be inaccessible, protected, or timed out.' });
+      return res.status(500).json({ 
+        error: 'Failed to crawl the URL', 
+        message: 'The crawler finished, but no content was successfully extracted. The target page might be inaccessible, protected, or timed out.'
+      });
     }
     
     console.log(`[CRAWL SUCCESS - Crawler Mode] URL: ${url}`);
@@ -162,7 +165,8 @@ app.post('/api/crawl', async (req, res) => {
       url: crawlResult.url,
       title: crawlResult.title,
       content: crawlResult.content,
-      structuredContent: crawlResult.structuredContent
+      structuredContent: crawlResult.structuredContent,
+      stats: crawlResult.stats
     });
     
   } catch (error) {
