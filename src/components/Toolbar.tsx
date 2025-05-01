@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ReactFlowInstance } from '@xyflow/react';
 import { NodeDataType } from '../types';
 import { exportFlowToJson, importFlowFromJson } from '../utils/jsonUtils';
-import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { Bars3Icon, XMarkIcon, ArrowUturnLeftIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+import ThemeToggle from './ThemeToggle';
 
 interface ToolbarProps {
   onAddNode: (type: NodeDataType['type']) => void;
@@ -18,6 +19,9 @@ interface ToolbarProps {
   toggleSidebar?: () => void;
   isSidebarOpen?: boolean;
   exportHtmlButton?: React.ReactNode;
+  onUndo?: () => void;
+  canUndo?: boolean;
+  exportImageButton?: React.ReactNode;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -34,9 +38,17 @@ const Toolbar: React.FC<ToolbarProps> = ({
   toggleSidebar,
   isSidebarOpen = false,
   exportHtmlButton,
+  onUndo,
+  canUndo = false,
+  exportImageButton,
 }) => {
   const [jsonVisible, setJsonVisible] = useState(false);
   const [jsonText, setJsonText] = useState('');
+  
+  // 添加URL状态和加载状态
+  const [url, setUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 处理导出
   const handleExport = () => {
@@ -75,41 +87,171 @@ const Toolbar: React.FC<ToolbarProps> = ({
       alert('导入失败，请检查JSON格式是否正确');
     }
   };
+  
+  // 处理从URL生成
+  const handleGenerateFromUrl = async () => {
+    if (!url.trim()) {
+      setErrorMessage('请输入有效的URL');
+      return;
+    }
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setUrl(`https://${url}`);
+    }
+    
+    setIsLoading(true);
+    setErrorMessage(null);
+    
+    try {
+      // 1. 调用爬虫API
+      const crawlResponse = await fetch('http://localhost:5000/api/crawl', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+      
+      if (!crawlResponse.ok) {
+        const errorData = await crawlResponse.json();
+        throw new Error(errorData.message || '爬取页面失败');
+      }
+      
+      const crawlData = await crawlResponse.json();
+      
+      // 2. 调用内容处理API
+      const extractResponse = await fetch('http://localhost:5000/api/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          content: crawlData.content,
+          title: crawlData.title
+        }),
+      });
+      
+      if (!extractResponse.ok) {
+        const errorData = await extractResponse.json();
+        throw new Error(errorData.message || '处理内容失败');
+      }
+      
+      const { nodes, edges } = await extractResponse.json();
+      
+      // 3. 更新流程图
+      setNodes(nodes);
+      setEdges(edges);
+      
+      // 4. 重新居中视图
+      if (rfInstance) {
+        setTimeout(() => {
+          rfInstance.fitView({ padding: 0.2 });
+        }, 100);
+      }
+      
+    } catch (error) {
+      console.error('从URL生成流程图时出错:', error);
+      setErrorMessage(error instanceof Error ? error.message : '未知错误');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="p-4 bg-white border-b shadow-sm">
+    <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
       <div className="flex items-center justify-between">
         <div className="flex space-x-2">
+          {onUndo && (
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className={`px-3 py-1 flex items-center space-x-1 ${
+                canUndo 
+                  ? 'bg-indigo-500 text-white hover:bg-indigo-600' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              } rounded`}
+              title="撤销上一步操作"
+            >
+              <ArrowUturnLeftIcon className="w-4 h-4" />
+              <span>撤销</span>
+            </button>
+          )}
           <button
             onClick={() => onAddNode('typeA')}
-            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
           >
             添加蓝色节点
           </button>
           <button
             onClick={() => onAddNode('typeB')}
-            className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+            className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
           >
             添加绿色节点
           </button>
           <button
             onClick={() => onAddNode('typeC')}
-            className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+            className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
           >
             添加黄色节点
           </button>
           <button
             onClick={onLayout}
-            className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600"
+            className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
           >
             自动布局
           </button>
+          
+          {/* URL输入和生成按钮 */}
+          <div className="flex items-center ml-4 space-x-1">
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="输入URL..."
+              className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-l focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 text-sm w-48"
+              disabled={isLoading}
+            />
+            <button
+              onClick={handleGenerateFromUrl}
+              disabled={isLoading}
+              className={`px-3 py-1 rounded-r flex items-center ${
+                isLoading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-500 hover:bg-blue-600'
+              } text-white transition-colors`}
+              title="从URL生成流程图"
+            >
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>生成中...</span>
+                </>
+              ) : (
+                <>
+                  <GlobeAltIcon className="w-4 h-4 mr-1" />
+                  <span>生成</span>
+                </>
+              )}
+            </button>
+          </div>
+          
+          {/* 错误消息 */}
+          {errorMessage && (
+            <div className="text-red-500 text-sm ml-2">{errorMessage}</div>
+          )}
         </div>
+        
         <div className="flex items-center space-x-2">
+          {/* Theme Toggle */}
+          <ThemeToggle />
+          
           {onSave && (
             <button
               onClick={onSave}
-              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
               title="手动保存当前流程图"
             >
               保存
@@ -141,7 +283,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
             </span>
           )}
           <div className="border-l border-gray-300 h-6 mx-1"></div>
+          <span className="text-xs text-gray-500 hidden md:inline-block">
+            提示: 选中元素后按Delete键可删除
+          </span>
+          <div className="border-l border-gray-300 h-6 mx-1"></div>
           {exportHtmlButton}
+          {exportImageButton}
           <button
             onClick={handleExport}
             className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
@@ -180,12 +327,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
       {/* JSON导入/导出模态框 */}
       {jsonVisible && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white p-4 rounded-lg shadow-lg w-3/4 max-w-3xl">
-            <h3 className="text-lg font-bold mb-2">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg w-3/4 max-w-3xl">
+            <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-100">
               {jsonText ? '导出JSON' : '导入JSON'}
             </h3>
             <textarea
-              className="w-full h-64 p-2 border rounded font-mono text-sm"
+              className="w-full h-64 p-2 border rounded font-mono text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
               value={jsonText}
               onChange={(e) => setJsonText(e.target.value)}
               placeholder={
@@ -195,7 +342,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <div className="flex justify-end mt-4 space-x-2">
               <button
                 onClick={() => setJsonVisible(false)}
-                className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
               >
                 取消
               </button>
@@ -205,14 +352,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     navigator.clipboard.writeText(jsonText);
                     alert('已复制到剪贴板');
                   }}
-                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
                   复制
                 </button>
               ) : (
                 <button
                   onClick={applyImport}
-                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
                   导入
                 </button>

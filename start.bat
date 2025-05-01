@@ -1,42 +1,82 @@
 @echo off
-echo 欢迎使用流程图编辑器!
-echo 正在检查环境...
+:: Backup startup script using Windows Batch.
+:: NOTE: start.ps1 is the recommended script due to better error handling and encoding support.
 
-:: 检查Node.js是否安装
+:: Attempt to set code page to UTF-8 for potential output improvement, suppress output
+chcp 65001 > nul
+
+echo.
+echo Starting Flowchart Editor (Batch Mode - Backup)...
+echo If you encounter issues, please use start.ps1 instead.
+echo.
+
+:: 1. Check for Node.js and npm
+echo Checking for Node.js and npm...
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo 未检测到Node.js! 请先安装Node.js后再运行此脚本。
-    echo 可以从 https://nodejs.org/zh-cn/download/ 下载安装。
+    echo.
+    echo **************************************************
+    echo  ERROR: Node.js not detected! Install from https://nodejs.org/
+    echo **************************************************
+    echo.
     pause
-    exit /b
+    exit /b 1
 )
-
-:: 检查npm是否安装
 where npm >nul 2>nul
 if %errorlevel% neq 0 (
-    echo 未检测到npm! 请确保Node.js安装正确。
+    echo.
+    echo **************************************************
+    echo  ERROR: npm not detected! Ensure Node.js installed correctly.
+    echo **************************************************
+    echo.
     pause
-    exit /b
+    exit /b 1
+)
+echo Node.js and npm found.
+
+:: Basic check for frontend dependencies (less robust than ps1)
+echo Checking basic frontend dependencies...
+if not exist "node_modules\react\package.json" (
+    echo.
+    echo **************************************************
+    echo  WARNING: Frontend dependencies might be missing.
+    echo  Please run download.ps1 or download.bat first.
+    echo **************************************************
+    echo.
+    pause
+    :: Continue anyway, maybe they are installed
 )
 
-echo 环境检查通过!
+:: Basic check for backend dependencies (less robust than ps1)
+echo Checking basic backend dependencies...
+if not exist "flowchart-backend\node_modules\express\package.json" (
+    echo.
+    echo **************************************************
+    echo  WARNING: Backend dependencies might be missing.
+    echo  Please run download.ps1 or download.bat first.
+    echo **************************************************
+    echo.
+    pause
+    :: Continue anyway
+)
 
-:: 检查node_modules目录是否存在
-if not exist "node_modules\" (
-    echo 首次运行，正在安装依赖...
-    npm install
-    if %errorlevel% neq 0 (
-        echo 依赖安装失败，请检查网络连接后重试!
-        pause
-        exit /b
-    )
-    echo 依赖安装完成!
+:: --- Start Services ---
+echo.
+echo Starting backend server...
+if exist "flowchart-backend\src\server.js" (
+    cd flowchart-backend
+    start "Flowchart Backend (BAT)" cmd /c "title Flowchart Backend (BAT) && node src/server.js"
+    cd ..
 ) else (
-    echo 检测到已安装依赖。
+    echo ERROR: Cannot find flowchart-backend\src\server.js
 )
 
-echo 正在启动流程图编辑器...
-start http://localhost:5173
-npm run dev
+echo.
+echo Starting frontend development server...
+start "Flowchart Frontend (BAT)" cmd /c "title Flowchart Frontend (BAT) && npm run dev"
 
+echo.
+echo Backend and Frontend services are attempting to start in separate windows...
+echo Check the new windows for status or errors.
+echo.
 pause 

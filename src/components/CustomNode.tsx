@@ -3,6 +3,9 @@ import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { z } from 'zod';
 import { NodeDataType } from '../types';
 
+// 添加链接图标
+import { LinkIcon } from '@heroicons/react/24/outline';
+
 // URL验证schema
 const urlSchema = z.string().url({ message: "无效的 URL" });
 
@@ -115,6 +118,15 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
 
   // 获取节点样式
   const nodeStyle = nodeTypeStyles[data.type as NodeType] || 'bg-gray-500 border-gray-700';
+
+  // 处理URL点击事件
+  const handleUrlClick = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation(); // 阻止事件冒泡，不触发节点选择
+    
+    if (data.url) {
+      window.open(data.url, '_blank');
+    }
+  }, [data.url]);
 
   // 生成连接点列表
   const renderHandles = () => {
@@ -233,167 +245,168 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
     return handles;
   };
 
-  return (
-    <>
-      {/* 动态渲染连接点 */}
-      {renderHandles()}
-      
-      {/* 节点主体 */}
-      <div className={`relative border-2 rounded-lg shadow-lg p-4 w-full h-full ${flipped ? 'bg-white' : nodeStyle}`}>
-        {!flipped ? (
-          // 正面显示
-          <>
-            <div className="font-bold text-xl mb-2 text-white">{label}</div>
-            <p className="text-white text-opacity-90 mb-4 text-sm">
-              {description || '(没有描述)'}
-            </p>
-            <div className="text-xs text-white opacity-75 text-right mt-2">
-              右键点击编辑
-            </div>
-          </>
-        ) : (
-          // 反面编辑表单
-          <>
-            <button 
-              onClick={deleteNode}
-              className="absolute top-2 right-2 text-gray-500 hover:text-red-600 p-1 rounded-full text-xs bg-gray-100 hover:bg-gray-200 transition-colors"
-              title="删除节点"
-            >
-              X
-            </button>
-            <div className="font-bold text-gray-700 mb-4 text-center">编辑节点</div>
-            
-            {/* 标题输入 */}
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                标题:
-              </label>
+  // 渲染
+  if (flipped) {
+    // 编辑模式
+    return (
+      <div className="p-4 border-2 rounded-lg shadow-md bg-white dark:bg-gray-800 dark:border-gray-700 w-[300px]">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">编辑节点</h3>
+        
+        {/* 标签输入 */}
+        <div className="mb-4">
+          <label htmlFor="node-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            标签 <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="node-label"
+            type="text"
+            value={label}
+            onChange={handleLabelChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            placeholder="节点标签"
+            required
+          />
+        </div>
+        
+        {/* URL输入 */}
+        <div className="mb-4">
+          <label htmlFor="node-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            URL
+          </label>
+          <input
+            id="node-url"
+            type="text"
+            value={url}
+            onChange={handleUrlChange}
+            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 ${
+              urlError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+            }`}
+            placeholder="https://example.com"
+          />
+          {urlError && (
+            <p className="mt-1 text-sm text-red-500 dark:text-red-400">{urlError}</p>
+          )}
+        </div>
+        
+        {/* 描述输入 */}
+        <div className="mb-4">
+          <label htmlFor="node-desc" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            描述
+          </label>
+          <textarea
+            id="node-desc"
+            value={description}
+            onChange={handleDescriptionChange}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            placeholder="节点描述"
+          />
+        </div>
+        
+        {/* 连接点设置 */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            连接点数量
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400">顶部</label>
               <input
-                type="text"
-                value={label}
-                onChange={handleLabelChange}
-                className="w-full px-3 py-2 rounded border border-gray-300 text-sm"
-                placeholder="节点标题"
+                type="number"
+                min="0"
+                max="4"
+                value={handleCounts.top}
+                onChange={(e) => handleCountChange('top', e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
               />
             </div>
-            
-            {/* URL输入 */}
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                网址:
-              </label>
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400">底部</label>
               <input
-                type="text"
-                value={url}
-                onChange={handleUrlChange}
-                className={`w-full px-3 py-2 rounded border text-sm ${
-                  urlError ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="https://example.com"
+                type="number"
+                min="0"
+                max="4"
+                value={handleCounts.bottom}
+                onChange={(e) => handleCountChange('bottom', e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
               />
-              {urlError && <p className="text-red-500 text-xs mt-1">{urlError}</p>}
             </div>
-            
-            {/* 描述输入 */}
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                描述:
-              </label>
-              <textarea
-                value={description}
-                onChange={handleDescriptionChange}
-                className="w-full px-3 py-2 rounded border border-gray-300 text-sm"
-                placeholder="节点描述"
-                rows={3}
-              ></textarea>
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400">左侧</label>
+              <input
+                type="number"
+                min="0"
+                max="4"
+                value={handleCounts.left}
+                onChange={(e) => handleCountChange('left', e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
             </div>
-            
-            {/* 连接点数量设置 */}
-            <div className="mb-3">
-              <div className="font-medium text-gray-700 mb-2 text-sm">连接点设置:</div>
-              <div className="grid grid-cols-2 gap-2">
-                {/* 顶部连接点 */}
-                <div className="mb-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    顶部连接点:
-                  </label>
-                  <select
-                    value={handleCounts.top}
-                    onChange={(e) => handleCountChange('top', e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
-                  >
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-                
-                {/* 底部连接点 */}
-                <div className="mb-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    底部连接点:
-                  </label>
-                  <select
-                    value={handleCounts.bottom}
-                    onChange={(e) => handleCountChange('bottom', e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
-                  >
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-                
-                {/* 左侧连接点 */}
-                <div className="mb-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    左侧连接点:
-                  </label>
-                  <select
-                    value={handleCounts.left}
-                    onChange={(e) => handleCountChange('left', e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
-                  >
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-                
-                {/* 右侧连接点 */}
-                <div className="mb-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    右侧连接点:
-                  </label>
-                  <select
-                    value={handleCounts.right}
-                    onChange={(e) => handleCountChange('right', e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-gray-300 text-sm"
-                  >
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400">右侧</label>
+              <input
+                type="number"
+                min="0"
+                max="4"
+                value={handleCounts.right}
+                onChange={(e) => handleCountChange('right', e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
             </div>
-            
-            <div className="text-xs text-gray-500 text-right mt-2">
-              右键点击返回
-            </div>
-          </>
-        )}
+          </div>
+        </div>
+        
+        {/* 操作按钮 */}
+        <div className="flex justify-between">
+          <button
+            onClick={() => updateNodeData({ flipped: false })}
+            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+          >
+            完成
+          </button>
+          <button
+            onClick={deleteNode}
+            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+          >
+            删除
+          </button>
+        </div>
       </div>
-    </>
-  );
+    );
+  } else {
+    // 正面显示
+    return (
+      <>
+        {renderHandles()}
+        <div className={`px-4 py-2 border-2 rounded-lg shadow-md ${nodeStyle} relative min-w-[150px] min-h-[60px] transition-shadow duration-200 hover:shadow-lg`}>
+          <div className="text-white font-medium text-lg mb-1 pr-6">
+            {data.label || '未命名节点'}
+            
+            {/* URL指示图标和点击功能 */}
+            {data.url && (
+              <button 
+                onClick={handleUrlClick}
+                className="absolute top-2 right-2 p-1 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+                title={`访问链接: ${data.url}`}
+              >
+                <LinkIcon className="w-4 h-4 text-white" />
+              </button>
+            )}
+          </div>
+          
+          {data.description && (
+            <div className="text-white text-opacity-80 text-sm truncate max-w-[180px]" title={data.description}>
+              {data.description}
+            </div>
+          )}
+
+          <div className="text-xs text-white opacity-75 text-right mt-2">
+            右键点击编辑
+          </div>
+        </div>
+      </>
+    );
+  }
 };
 
 export default CustomNode;

@@ -64,7 +64,7 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
         id={id}
         style={{
           ...style,
-          strokeWidth: selected ? 3 : 2,
+          strokeWidth: selected ? 4 : 3,
           stroke: selected ? '#ff7300' : '#888',
         }}
         className="react-flow__edge-path"
@@ -77,16 +77,11 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
-            background: 'white',
-            padding: '4px 8px',
-            borderRadius: 4,
             fontSize: 12,
             fontWeight: 500,
-            border: '1px solid #ddd',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
             zIndex: 1 
           }}
-          className="nodrag nopan"
+          className="nodrag nopan bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 shadow-sm"
           onDoubleClick={handleDoubleClick}
         >
           {isEditing ? (
@@ -95,7 +90,7 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
                 type="text"
                 value={label}
                 onChange={handleLabelChange}
-                className="border px-1 py-0.5 text-xs w-auto min-w-[80px] mr-1 outline-none focus:ring-1 focus:ring-blue-400"
+                className="border border-gray-300 dark:border-gray-600 px-1 py-0.5 text-xs w-auto min-w-[80px] mr-1 outline-none focus:ring-1 focus:ring-blue-400 dark:bg-gray-700 dark:text-gray-200"
                 autoFocus
                 onBlur={handleLabelSave} 
                 onKeyDown={(e) => {
@@ -113,11 +108,11 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
             </div>
           ) : (
             <div
-              className="cursor-pointer select-none min-h-[1em]"
+              className="cursor-pointer select-none min-h-[1em] text-gray-900 dark:text-gray-200"
               title="双击编辑标签"
             >
               {/* 使用 label 状态显示，为空时显示占位符 */}
-              {label || <span className="text-gray-400 italic">(双击添加)</span>}
+              {label || <span className="text-gray-400 dark:text-gray-500 italic">(双击添加)</span>}
             </div>
           )}
         </div>

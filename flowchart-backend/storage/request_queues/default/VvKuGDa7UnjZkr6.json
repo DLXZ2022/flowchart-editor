@@ -1,0 +1,9 @@
+{
+	"id": "VvKuGDa7UnjZkr6",
+	"json": "{\"id\":\"VvKuGDa7UnjZkr6\",\"url\":\"https://www.ntu.edu.cn/\",\"loadedUrl\":\"https://www.ntu.edu.cn/\",\"uniqueKey\":\"https://www.ntu.edu.cn\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":0,\"errorMessages\":[],\"headers\":{},\"userData\":{\"__crawlee\":{\"state\":4}},\"handledAt\":\"2025-05-01T15:43:39.218Z\"}",
+	"method": "GET",
+	"orderNo": null,
+	"retryCount": 0,
+	"uniqueKey": "https://www.ntu.edu.cn",
+	"url": "https://www.ntu.edu.cn/"
+}

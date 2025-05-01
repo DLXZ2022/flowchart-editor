@@ -9,9 +9,26 @@ html, body, #root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* 深色模式下的基本样式 */
+@media (prefers-color-scheme: dark) {
+  html.dark {
+    color-scheme: dark;
+  }
+}
+
+html.dark {
+  background-color: #1f2937; /* gray-800 */
+  color: #e5e7eb; /* gray-200 */
+}
+
 .react-flow__node {
   border-radius: 6px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 深色模式下的节点样式 */
+.dark .react-flow__node {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .react-flow__edge-path {
@@ -24,11 +41,32 @@ html, body, #root {
   font-weight: 500;
 }
 
+/* 深色模式下的边文本样式 */
+.dark .react-flow__edge-text {
+  fill: #e5e7eb; /* gray-200 */
+}
+
 .react-flow__controls {
   bottom: 20px;
   right: 20px;
   left: auto;
   top: auto;
+}
+
+/* 深色模式下的控制按钮样式 */
+.dark .react-flow__controls {
+  background-color: #374151; /* gray-700 */
+  border-color: #4b5563; /* gray-600 */
+}
+
+.dark .react-flow__controls-button {
+  background-color: #374151; /* gray-700 */
+  border-color: #4b5563; /* gray-600 */
+  color: #e5e7eb; /* gray-200 */
+}
+
+.dark .react-flow__controls-button:hover {
+  background-color: #4b5563; /* gray-600 */
 }
 
 .dndflow {
@@ -44,6 +82,11 @@ html, body, #root {
 
 .custom-node {
   min-width: 250px;
+}
+
+/* 深色模式下高亮节点样式 */
+.dark .highlight-node {
+  box-shadow: 0 0 10px 5px rgba(96, 165, 250, 0.7) !important; /* blue-400 with more opacity */
 }
 
 .custom-node .tippy-editor .ProseMirror {

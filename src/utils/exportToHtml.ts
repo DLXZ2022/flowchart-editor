@@ -89,7 +89,8 @@ export const exportFlowchartToHtml = async (
   rfInstance: ReactFlowInstance,
   title: string = '流程图',
   options?: { 
-    sidebarContent?: string
+    sidebarContent?: string,
+    darkMode?: boolean  // 添加深色模式选项
   }
 ): Promise<void> => {
   try {
@@ -142,6 +143,7 @@ export const exportFlowchartToHtml = async (
             left: ${translateX}px; 
             top: ${translateY}px; 
             background-color: ${color};
+            transform: translate(0, 0);
           "
           data-id="${node.id}"
           data-node-type="${data.type || ''}"
@@ -332,289 +334,262 @@ export const exportFlowchartToHtml = async (
       `;
     }).join('\n');
     
-    // 创建完整的HTML
+    // 构建HTML内容，添加深色模式支持
     const htmlContent = `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" ${options?.darkMode ? 'class="dark"' : ''}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Frame-Options" content="DENY">
   <title>${title}</title>
   <style>
-    body, html {
-      height: 100%;
+    /* 基础样式 */
+    :root {
+      --background-color: #ffffff;
+      --text-color: #1f2937;
+      --border-color: #e5e7eb;
+      --header-bg: #f3f4f6;
+      --sidebar-bg: #ffffff;
+      --sidebar-border: #e5e7eb;
+      --control-bg: #f3f4f6;
+      --control-hover: #e5e7eb;
+      --edge-color: #9ca3af;
+      --edge-highlight: #3b82f6;
+      --shadow-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    /* 深色模式变量 */
+    html.dark {
+      --background-color: #1f2937;
+      --text-color: #f3f4f6;
+      --border-color: #4b5563;
+      --header-bg: #111827;
+      --sidebar-bg: #111827;
+      --sidebar-border: #374151;
+      --control-bg: #374151;
+      --control-hover: #4b5563;
+      --edge-color: #6b7280;
+      --edge-highlight: #60a5fa;
+      --shadow-color: rgba(0, 0, 0, 0.5);
+    }
+    
+    * {
       margin: 0;
       padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      overflow: hidden;
+      box-sizing: border-box;
     }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    
     .main-container {
       display: flex;
       width: 100%;
       height: 100vh;
     }
+    
+    /* 流程图容器 */
     #flowchart-container {
-      width: ${options?.sidebarContent ? 'calc(100% - 300px)' : '100%'};
-      height: 100%;
-      background-color: #f9fafb;
+      flex: 1;
       position: relative;
       overflow: hidden;
+      height: 100vh;
+      background: var(--background-color);
+      border-right: 1px solid var(--border-color);
     }
+    
     .header {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 10;
-      background-color: rgba(255, 255, 255, 0.8);
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 14px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-    #flowchart-pane {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      top: 0;
-      left: 0;
-      overflow: visible;
-      transition: transform 0.05s;
-      transform-origin: 0 0;
-    }
-    .node {
-      box-sizing: border-box;
-      position: absolute;
-      width: 150px;
-      height: 60px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-      color: white;
-      font-weight: bold;
+      height: 50px;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
-      justify-content: center;
-      text-align: center;
-      user-select: none;
-      z-index: 2;
+      padding: 0 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    
+    #flowchart-pane {
+      width: 100%;
+      height: calc(100% - 50px);
+      transform-origin: top left;
+      position: relative;
+    }
+    
+    /* 节点和边样式 */
+    .node {
+      position: absolute;
+      padding: 10px;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px var(--shadow-color);
+      width: 150px;
+      min-height: 60px;
+      color: white;
       transition: box-shadow 0.2s;
-      overflow: visible;
     }
+    
     .node:hover {
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 8px var(--shadow-color);
     }
+    
     .node-label {
-      width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-weight: 500;
+      margin-bottom: 5px;
     }
-    .edge-container {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      top: 0;
-      left: 0;
-      z-index: 1;
-      pointer-events: none;
-      overflow: visible;
-    }
+    
     .edge {
-      fill: none;
-      stroke: #666;
-      stroke-width: 2px;
-      pointer-events: none;
-      transition: stroke 0.3s, stroke-width 0.3s;
-    }
-    .edge-highlighted {
-      stroke: #3b82f6;
+      stroke: var(--edge-color);
       stroke-width: 3px;
-      filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.5));
+      fill: none;
     }
-    .edge-label {
-      position: absolute;
-      padding: 3px 6px;
-      background-color: white;
-      border-radius: 4px;
+    
+    .edge-highlighted {
+      stroke: var(--edge-highlight);
+      stroke-width: 4px;
+    }
+    
+    .edge-text {
+      fill: var(--text-color);
       font-size: 12px;
-      transform: translate(-50%, -50%);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      z-index: 1;
+      font-weight: 500;
       pointer-events: none;
-      transition: box-shadow 0.3s;
     }
-    .node:hover + .edge-label {
-      box-shadow: 0 2px 5px rgba(59, 130, 246, 0.4);
-    }
+    
+    /* 侧边栏样式 */
     #sidebar {
       width: 300px;
-      height: 100%;
-      background-color: white;
-      border-left: 1px solid #e5e7eb;
-      box-shadow: -2px 0 5px rgba(0,0,0,0.05);
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--sidebar-border);
       overflow-y: auto;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
+      height: 100vh;
+      padding: 0;
+      display: ${options?.sidebarContent ? 'block' : 'none'};
     }
+    
     .sidebar-header {
-      padding: 1rem;
-      border-bottom: 1px solid #e5e7eb;
-      background-color: #f9fafb;
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      padding: 15px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--header-bg);
     }
-    .sidebar-header h2 {
-      margin: 0;
-      font-size: 1.25rem;
-      color: #374151;
-      display: flex;
-      align-items: center;
-    }
-    .sidebar-header h2:before {
-      content: '📄';
-      margin-right: 8px;
-      font-size: 1.2em;
-    }
+    
     .sidebar-content {
-      padding: 1rem;
-      line-height: 1.6;
-      color: #374151;
-      font-size: 0.95rem;
-      flex: 1;
+      padding: 20px;
     }
+    
+    /* 为sidebar-content中的元素添加样式 */
     .sidebar-content h1, .sidebar-content h2, .sidebar-content h3 {
-      margin-top: 1.5rem;
-      margin-bottom: 1rem;
-      color: #111827;
-      font-weight: 600;
+      margin-top: 0.8em;
+      margin-bottom: 0.5em;
     }
-    .sidebar-content h1 {
-      font-size: 1.5rem;
-      border-bottom: 2px solid #e5e7eb;
-      padding-bottom: 0.5rem;
-    }
-    .sidebar-content h2 {
-      font-size: 1.3rem;
-      border-bottom: 1px solid #f3f4f6;
-      padding-bottom: 0.3rem;
-    }
-    .sidebar-content h3 {
-      font-size: 1.1rem;
-    }
+    
     .sidebar-content p {
-      margin-bottom: 1rem;
+      margin-bottom: 1em;
+      line-height: 1.5;
     }
+    
     .sidebar-content ul, .sidebar-content ol {
-      margin-left: 1.5rem;
-      margin-bottom: 1rem;
+      margin-left: 1.5em;
+      margin-bottom: 1em;
     }
-    .sidebar-content li {
-      margin-bottom: 0.5rem;
-    }
+    
     .sidebar-content a {
       color: #3b82f6;
-      text-decoration: none;
     }
-    .sidebar-content a:hover {
-      text-decoration: underline;
-    }
+    
     .sidebar-content code {
-      background-color: #f3f4f6;
-      padding: 0.2rem 0.4rem;
-      border-radius: 0.25rem;
+      background: #f1f5f9;
+      padding: 2px 4px;
+      border-radius: 3px;
       font-family: monospace;
-      font-size: 0.9em;
     }
+    
+    html.dark .sidebar-content code {
+      background: #374151;
+    }
+    
     .sidebar-content pre {
-      background-color: #f3f4f6;
-      padding: 1rem;
-      border-radius: 0.25rem;
+      background: #f1f5f9;
+      padding: 10px;
+      border-radius: 5px;
       overflow-x: auto;
-      margin-bottom: 1rem;
-      border: 1px solid #e5e7eb;
+      margin-bottom: 1em;
     }
-    .sidebar-content pre code {
-      background-color: transparent;
-      padding: 0;
-      display: block;
+    
+    html.dark .sidebar-content pre {
+      background: #374151;
     }
-    .sidebar-content blockquote {
-      border-left: 4px solid #3b82f6;
-      padding-left: 1rem;
-      margin-left: 0;
-      margin-right: 0;
-      font-style: italic;
-      color: #4b5563;
-      background-color: #f9fafb;
-      padding: 0.5rem 1rem;
-      border-radius: 0 0.25rem 0.25rem 0;
-    }
-    .sidebar-content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 1rem;
-    }
-    .sidebar-content th, .sidebar-content td {
-      border: 1px solid #e5e7eb;
-      padding: 0.5rem;
-    }
-    .sidebar-content th {
-      background-color: #f9fafb;
-      font-weight: 600;
-    }
-    .sidebar-content tr:nth-child(even) {
-      background-color: #f9fafb;
-    }
-    .sidebar-content img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 0.25rem;
-      margin: 1rem 0;
-    }
-    .sidebar-content hr {
-      border: 0;
-      border-top: 1px solid #e5e7eb;
-      margin: 1.5rem 0;
-    }
+    
+    /* 缩放控制 */
     .zoom-controls {
       position: absolute;
       bottom: 20px;
       right: 20px;
-      background: white;
-      border-radius: 4px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       display: flex;
-      z-index: 100;
+      flex-direction: column;
+      gap: 5px;
     }
+    
     .zoom-button {
-      width: 30px;
-      height: 30px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: var(--control-bg);
+      color: var(--text-color);
       display: flex;
       align-items: center;
       justify-content: center;
-      background: white;
-      border: none;
-      border-radius: 4px;
       font-size: 18px;
       cursor: pointer;
     }
+    
     .zoom-button:hover {
-      background: #f1f1f1;
+      background: var(--control-hover);
+    }
+    
+    /* 深色模式切换按钮 */
+    .theme-toggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: var(--control-bg);
+      color: var(--text-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 10;
+    }
+    
+    .theme-toggle:hover {
+      background: var(--control-hover);
     }
   </style>
 </head>
 <body>
   <div class="main-container">
     <div id="flowchart-container">
-      <div class="header">${title}</div>
+      <div class="header">
+        ${title}
+        <button class="theme-toggle" id="theme-toggle" title="切换明暗模式">
+          <span id="theme-icon">🌙</span>
+        </button>
+      </div>
       <div id="flowchart-pane" style="transform: translate(${x}px, ${y}px) scale(${zoom});">
         <!-- 连线 -->
         <svg class="edge-container" width="100%" height="100%" style="position: absolute; overflow: visible; z-index: 1;">
           <defs>
             <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--edge-color)" />
             </marker>
           </defs>
           ${edgesHtml}
@@ -643,6 +618,29 @@ export const exportFlowchartToHtml = async (
     let dragStartX = 0;
     let dragStartY = 0;
     
+    // 深色模式切换
+    const toggleTheme = () => {
+      const html = document.documentElement;
+      const themeIcon = document.getElementById('theme-icon');
+      
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        themeIcon.textContent = '🌙';
+        localStorage.setItem('theme', 'light');
+      } else {
+        html.classList.add('dark');
+        themeIcon.textContent = '☀️';
+        localStorage.setItem('theme', 'dark');
+      }
+    };
+    
+    // 绑定深色模式切换按钮事件
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
+    // 初始化主题图标
+    document.getElementById('theme-icon').textContent = 
+      document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+    
     // 应用变换
     function applyTransform() {
       pane.style.transform = \`translate(\${translateX}px, \${translateY}px) scale(\${scale})\`;
@@ -650,8 +648,8 @@ export const exportFlowchartToHtml = async (
     
     // 注册拖拽事件
     container.addEventListener('mousedown', (e) => {
-      // 如果点击的是节点，不启动拖拽
-      if (e.target.closest('.node')) {
+      // 如果点击的是节点或主题切换按钮，不启动拖拽
+      if (e.target.closest('.node') || e.target.closest('.theme-toggle')) {
         return;
       }
       

@@ -16,6 +16,7 @@ import {
   NodeMouseHandler,
   ReactFlowInstance,
   Viewport,
+  SelectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -26,6 +27,9 @@ import Toolbar from './components/Toolbar';
 import Sidebar from './components/Sidebar';
 import SidebarContent from './components/SidebarContent';
 import ExportHtmlButton from './components/ExportHtmlButton';
+import PropertiesSidebar from './components/PropertiesSidebar';
+import ExportImageButton from './components/ExportImageButton';
+import SearchBox from './components/SearchBox';
 
 // 工具函数和类型
 import { NodeDataType, EdgeData, FlowchartNode, FlowchartEdge } from './types';
@@ -37,6 +41,31 @@ import {
   clearFlowchartFromLocalStorage,
   hasStoredFlowchart 
 } from './utils/storageUtils';
+
+// 初始化深色模式
+const initializeTheme = () => {
+  // 首先检查用户之前的选择
+  const savedTheme = localStorage.getItem('theme');
+  
+  if (savedTheme === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else if (savedTheme === 'light') {
+    document.documentElement.classList.remove('dark');
+  } else {
+    // 如果没有保存的主题，检查系统偏好
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (prefersDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }
+};
+
+// 在应用启动时初始化主题
+initializeTheme();
 
 // 生成唯一ID的辅助函数
 const getId = (): string => `node_${Math.random().toString(36).substr(2, 9)}`;
@@ -99,10 +128,21 @@ const FlowchartEditor: React.FC = () => {
   const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
   const [lastSavedTime, setLastSavedTime] = useState<string>('未保存');
   
+  // 添加历史记录用于撤销功能
+  const [history, setHistory] = useState<{nodes: FlowchartNode[], edges: FlowchartEdge[]}[]>([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState<number>(-1);
+  const [isHistoryChanging, setIsHistoryChanging] = useState<boolean>(false);
+  
   // 侧边栏状态
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [sidebarContent, setSidebarContent] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  
+  // 节点选择状态
+  const [selectedElements, setSelectedElements] = useState<{ nodes: string[], edges: string[] }>({
+    nodes: [],
+    edges: []
+  });
   
   // 获取React Flow实例引用，用于导出功能
   const { getNodes, getEdges, getViewport, setViewport } = useReactFlow();
@@ -111,6 +151,20 @@ const FlowchartEditor: React.FC = () => {
   
   // 自动保存的定时器
   const autoSaveTimerRef = useRef<number | null>(null);
+  
+  // 添加选中节点的状态
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [propertiesOpen, setPropertiesOpen] = useState<boolean>(false);
+  
+  // 添加高亮节点的状态
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  
+  // 获取选中的节点数据
+  const selectedNode = useCallback(() => {
+    if (!selectedNodeId) return null;
+    const node = nodes.find(n => n.id === selectedNodeId);
+    return node ? { id: node.id, data: node.data } : null;
+  }, [selectedNodeId, nodes]);
 
   // 加载保存的数据
   useEffect(() => {
@@ -197,7 +251,129 @@ const FlowchartEditor: React.FC = () => {
     }
   }, [nodes, edges]);
   
-  // 处理新连接
+  // 记录当前状态到历史记录
+  const saveToHistory = useCallback(() => {
+    if (isHistoryChanging) return; // 如果正在恢复历史，不再保存新历史
+    
+    const currentNodes = getNodes() as FlowchartNode[];
+    const currentEdges = getEdges() as FlowchartEdge[];
+    
+    // 创建新的历史记录
+    setHistory(prev => {
+      // 如果不是在最新状态，移除后面的历史
+      const newHistory = prev.slice(0, currentHistoryIndex + 1);
+      // 添加当前状态
+      return [...newHistory, {nodes: JSON.parse(JSON.stringify(currentNodes)), edges: JSON.parse(JSON.stringify(currentEdges))}];
+    });
+    setCurrentHistoryIndex(prev => prev + 1);
+  }, [getNodes, getEdges, currentHistoryIndex, isHistoryChanging]);
+
+  // 撤销操作
+  const handleUndo = useCallback(() => {
+    // 检查是否有历史记录可撤销
+    if (currentHistoryIndex > 0) {
+      setIsHistoryChanging(true);
+      const prevState = history[currentHistoryIndex - 1];
+      setNodes(prevState.nodes);
+      setEdges(prevState.edges);
+      setCurrentHistoryIndex(prev => prev - 1);
+      setLastSavedTime('有未保存的更改');
+      
+      // 恢复完成后，重置标志
+      setTimeout(() => {
+        setIsHistoryChanging(false);
+      }, 50);
+    }
+  }, [history, currentHistoryIndex, setNodes, setEdges]);
+
+  // 初始加载时保存初始状态到历史记录
+  useEffect(() => {
+    // 只在组件首次挂载时保存初始状态
+    if (history.length === 0 && nodes.length > 0) {
+      saveToHistory();
+    }
+  }, [history.length, nodes.length, saveToHistory]);
+
+  // 保存重要操作到历史记录
+  // 替代之前直接观察nodes和edges的方式
+  const saveHistoryAfterChange = useCallback(() => {
+    if (!isHistoryChanging) {
+      saveToHistory();
+    }
+  }, [saveToHistory, isHistoryChanging]);
+
+  // 添加新节点时记录历史
+  const onAddNode = useCallback(
+    (type: NodeDataType['type']) => {
+      const id = getId();
+      const newNode: FlowchartNode = {
+        id,
+        type: 'custom',
+        position: {
+          x: Math.random() * 300 + 50,
+          y: Math.random() * 300 + 50,
+        },
+        data: {
+          label: `节点 ${id.slice(5, 8)}`,
+          type: type,
+          url: '',
+          description: '请右键点击添加描述',
+          flipped: false,
+          handleCounts: { top: 1, bottom: 1, left: 1, right: 1 } // 默认每边1个连接点
+        }
+      };
+      
+      setNodes(nds => [...nds, newNode]);
+      
+      // 添加节点后保存历史
+      setTimeout(saveHistoryAfterChange, 50);
+    },
+    [setNodes, saveHistoryAfterChange]
+  );
+
+  // 处理删除选中元素
+  const deleteSelectedElements = useCallback(() => {
+    if (selectedElements.nodes.length > 0 || selectedElements.edges.length > 0) {
+      // 获取当前所有节点和边
+      const currentNodes = getNodes() as FlowchartNode[];
+      const currentEdges = getEdges() as FlowchartEdge[];
+      
+      // 获取选中的节点ID
+      const selectedNodeIds = selectedElements.nodes;
+      
+      // 获取与选中节点关联的边ID
+      const relatedEdgeIds = currentEdges
+        .filter(edge => 
+          selectedNodeIds.includes(edge.source) || 
+          selectedNodeIds.includes(edge.target)
+        )
+        .map(edge => edge.id);
+      
+      // 获取选中的边ID
+      const selectedEdgeIds = [...selectedElements.edges, ...relatedEdgeIds];
+      
+      // 删除选中的边和与选中节点关联的边
+      if (selectedEdgeIds.length > 0) {
+        setEdges(edges => edges.filter(edge => !selectedEdgeIds.includes(edge.id)));
+      }
+
+      // 删除节点
+      if (selectedNodeIds.length > 0) {
+        setNodes(nodes => nodes.filter(node => !selectedNodeIds.includes(node.id)));
+      }
+
+      // 重置选择状态
+      setSelectedElements({ nodes: [], edges: [] });
+      
+      // 清除流程图状态为未保存
+      setLastSavedTime('有未保存的更改');
+      
+      // 删除操作后保存历史
+      setTimeout(saveHistoryAfterChange, 50);
+    }
+  }, [selectedElements, getNodes, getEdges, setNodes, setEdges, saveHistoryAfterChange]);
+
+  // 在连接处理函数中也添加历史记录
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       // 验证连接是否会导致循环
@@ -219,34 +395,11 @@ const FlowchartEditor: React.FC = () => {
       } as FlowchartEdge;
       
       setEdges((eds) => addEdge(newEdge, eds));
-    },
-    [edges, setEdges]
-  );
-  
-  // 添加新节点
-  const onAddNode = useCallback(
-    (type: NodeDataType['type']) => {
-      const id = getId();
-      const newNode: FlowchartNode = {
-        id,
-        type: 'custom',
-        position: {
-          x: Math.random() * 300 + 50,
-          y: Math.random() * 300 + 50,
-        },
-        data: {
-          label: `节点 ${id.slice(5, 8)}`,
-          type: type,
-          url: '',
-          description: '请右键点击添加描述',
-          flipped: false,
-          handleCounts: { top: 1, bottom: 1, left: 1, right: 1 } // 默认每边1个连接点
-        },
-      };
       
-      setNodes((nds) => [...nds, newNode]);
+      // 连接操作后保存历史
+      setTimeout(saveHistoryAfterChange, 50);
     },
-    [setNodes]
+    [edges, setEdges, saveHistoryAfterChange]
   );
   
   // 自动布局
@@ -282,44 +435,93 @@ const FlowchartEditor: React.FC = () => {
     }
   }, [getNodes, getEdges, setNodes]);
   
-  // 节点点击处理，用于打开URL
+  // 处理节点点击
   const onNodeClick: NodeMouseHandler = useCallback((event, node) => {
-    const data = node.data as NodeDataType;
+    // 防止事件冒泡
+    event.stopPropagation();
     
-    // 只有当节点在正面（未翻转）状态下才打开URL
-    if (!data.flipped && data.url) {
-      window.open(data.url, '_blank');
+    // 如果点击的是当前选中的节点，则切换属性面板的显示状态
+    if (node.id === selectedNodeId) {
+      setPropertiesOpen(prev => !prev);
+    } else {
+      // 如果点击的是不同的节点，则选中该节点并打开属性面板
+      setSelectedNodeId(node.id);
+      setPropertiesOpen(true);
     }
+  }, [selectedNodeId]);
+  
+  // 处理画布点击（取消选中节点）
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+    setPropertiesOpen(false);
   }, []);
   
-  // 处理节点右键点击（用于翻转节点）
-  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: any) => {
-    // 阻止默认右键菜单
-    event.preventDefault();
-    
-    // 获取当前的翻转状态
-    const currentFlipped = node.data.flipped;
-    
-    // 切换节点的翻转状态
-    setNodes((nds) =>
-      nds.map((n) => {
-        if (n.id === node.id) {
-          // 创建一个新的节点对象，确保更新被应用
+  // 更新节点数据的函数
+  const updateNodeData = useCallback((nodeId: string, data: Partial<NodeDataType>) => {
+    setNodes(nds => 
+      nds.map(node => {
+        if (node.id === nodeId) {
           return {
-            ...n,
+            ...node,
             data: {
-              ...n.data,
-              flipped: !currentFlipped,
-            },
+              ...node.data,
+              ...data
+            }
           };
         }
-        return n;
+        return node;
       })
     );
     
-    // 打印日志以便调试
-    console.log(`Node ${node.id} flipped: ${!currentFlipped}`);
-  }, [setNodes]);
+    // 标记有未保存的更改
+    setLastSavedTime('有未保存的更改');
+    
+    // 保存到历史记录
+    setTimeout(saveHistoryAfterChange, 50);
+  }, [setNodes, setLastSavedTime, saveHistoryAfterChange]);
+  
+  // 关闭属性面板
+  const closeProperties = useCallback(() => {
+    setPropertiesOpen(false);
+  }, []);
+  
+  // 节点右键菜单处理
+  const onNodeContextMenu: NodeMouseHandler = useCallback(
+    (event, node) => {
+      // 防止默认的上下文菜单
+      event.preventDefault();
+      
+      // 切换节点的编辑状态（翻转）
+      const data = node.data as NodeDataType;
+      
+      setNodes(ns =>
+        ns.map(n => {
+          if (n.id === node.id) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                flipped: !data.flipped,
+              },
+            };
+          }
+          return n;
+        })
+      );
+      
+      // 如果打开了属性面板，关闭它
+      if (propertiesOpen && selectedNodeId === node.id) {
+        setPropertiesOpen(false);
+      }
+      
+      // 更新lastSavedTime状态
+      setLastSavedTime('有未保存的更改');
+      
+      // 保存到历史记录
+      setTimeout(saveHistoryAfterChange, 50);
+    },
+    [setNodes, setLastSavedTime, saveHistoryAfterChange, propertiesOpen, selectedNodeId]
+  );
   
   // 默认连接验证
   const isValidConnection = useCallback(
@@ -338,6 +540,35 @@ const FlowchartEditor: React.FC = () => {
     [edges]
   );
 
+  // 处理节点选择
+  const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: {
+    nodes: Array<any>;
+    edges: Array<any>;
+  }) => {
+    setSelectedElements({
+      nodes: selectedNodes.map((node: any) => node.id),
+      edges: selectedEdges.map((edge: any) => edge.id)
+    });
+  }, []);
+
+  // 添加键盘事件处理器
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // 如果当前在编辑状态（比如编辑侧边栏内容），不响应删除操作
+      if (isEditing) return;
+      
+      if (event.key === 'Delete') { // 删除Backspace条件
+        event.preventDefault();
+        deleteSelectedElements();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [deleteSelectedElements, isEditing]);
+  
   // 切换侧边栏开关
   const toggleSidebar = useCallback(() => {
     setSidebarOpen(prev => {
@@ -362,6 +593,73 @@ const FlowchartEditor: React.FC = () => {
     );
   }, [sidebarContent]);
 
+  // 渲染ExportImageButton组件
+  const renderExportImageButton = useCallback(() => {
+    return (
+      <ExportImageButton
+        rfInstance={reactFlowInstance}
+      />
+    );
+  }, [reactFlowInstance]);
+
+  // 处理节点聚焦
+  const focusNode = useCallback((nodeId: string) => {
+    if (!reactFlowInstance) return;
+    
+    // 找到节点
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    // 设置高亮状态
+    setHighlightedNodeId(nodeId);
+    
+    // 聚焦到节点 - 将节点居中显示
+    const x = node.position.x + 100; // 添加偏移量以便节点位于中心
+    const y = node.position.y + 50;
+
+    reactFlowInstance.setCenter(x, y, { duration: 800 });
+    
+    // 三秒后取消高亮
+    setTimeout(() => setHighlightedNodeId(null), 3000);
+  }, [reactFlowInstance, nodes]);
+  
+  // 根据高亮状态修改节点样式
+  useEffect(() => {
+    if (highlightedNodeId) {
+      setNodes(nds => nds.map(n => {
+        if (n.id === highlightedNodeId) {
+          return {
+            ...n,
+            style: { 
+              ...n.style,
+              boxShadow: '0 0 8px 4px rgba(59, 130, 246, 0.6)' 
+            },
+            className: (n.className || '') + ' highlight-node'
+          };
+        }
+        // 清除其他节点的高亮
+        return {
+          ...n,
+          style: { 
+            ...n.style,
+            boxShadow: undefined 
+          },
+          className: (n.className || '').replace('highlight-node', '')
+        };
+      }));
+    } else {
+      // 清除所有节点的高亮状态
+      setNodes(nds => nds.map(n => ({
+        ...n,
+        style: { 
+          ...n.style,
+          boxShadow: undefined 
+        },
+        className: (n.className || '').replace('highlight-node', '')
+      })));
+    }
+  }, [highlightedNodeId, setNodes]);
+
   return (
     <div className="w-full h-screen">
       <Toolbar
@@ -377,7 +675,10 @@ const FlowchartEditor: React.FC = () => {
         lastSavedTime={lastSavedTime}
         toggleSidebar={toggleSidebar}
         isSidebarOpen={sidebarOpen}
+        onUndo={handleUndo}
+        canUndo={currentHistoryIndex > 0}
         exportHtmlButton={renderExportHtmlButton()}
+        exportImageButton={renderExportImageButton()}
       />
       <div className="h-[calc(100%-60px)] relative">
         <ReactFlow
@@ -390,15 +691,45 @@ const FlowchartEditor: React.FC = () => {
           edgeTypes={edgeTypes}
           onNodeClick={onNodeClick as any}
           onNodeContextMenu={onNodeContextMenu as any}
+          onPaneClick={onPaneClick}
           isValidConnection={isValidConnection as any}
           onInit={setReactFlowInstance as any}
           fitView
           attributionPosition="bottom-left"
           ref={reactFlowRef}
+          onSelectionChange={onSelectionChange}
+          multiSelectionKeyCode="Control"
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          selectNodesOnDrag
+          deleteKeyCode={null} // 禁用内置的删除功能，使用我们自定义的删除处理
+          className="dark:bg-gray-900"
         >
-          <Controls />
-          <MiniMap />
-          <Background />
+          <Controls className="dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700" />
+          <MiniMap
+            className="dark:bg-gray-800 dark:border-gray-700"
+            nodeColor={(n) => {
+              const data = n.data as NodeDataType;
+              if (data.type === 'typeA') return '#3b82f6';
+              if (data.type === 'typeB') return '#10b981';
+              if (data.type === 'typeC') return '#f59e0b';
+              return '#888';
+            }}
+          />
+          <Background
+            color="#aaa"
+            gap={16}
+            size={1}
+            className="dark:bg-gray-900"
+          />
+          
+          {/* 搜索框 */}
+          <div className="absolute top-4 left-4 z-10">
+            <SearchBox
+              rfInstance={reactFlowInstance}
+              onFocusNode={focusNode}
+            />
+          </div>
         </ReactFlow>
         
         {/* 侧边栏 */}
@@ -414,6 +745,14 @@ const FlowchartEditor: React.FC = () => {
             onToggleEdit={toggleEditMode}
           />
         </Sidebar>
+        
+        {/* 属性面板 */}
+        <PropertiesSidebar
+          isOpen={propertiesOpen}
+          onClose={closeProperties}
+          selectedNode={selectedNode()}
+          onUpdateNodeData={updateNodeData}
+        />
       </div>
     </div>
   );
