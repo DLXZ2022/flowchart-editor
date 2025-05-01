@@ -75,6 +75,7 @@
 
 4.  **(仅 Windows 用户) 检查 WMI**: 这个项目的部分功能依赖 Windows 的一个系统工具 `wmic.exe`。
     *   通常它应该存在于 `C:\Windows\System32\wbem` 并且系统可以找到它。如果后面的步骤中遇到与 `wmic.exe` 相关的错误，请尝试以 **管理员身份** 打开 **命令提示符 (cmd)** 或 **PowerShell**，然后运行 `sfc /scannow` 命令来扫描和修复系统文件，完成后重启电脑。
+    在powershell中运行dism /online /add-capability /capability:wmic~~~~ ,即可下载（参考https://xbin.live/archives/4174）
 
 **第二步：获取项目代码**
 
