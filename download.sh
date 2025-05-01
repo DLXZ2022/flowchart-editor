@@ -1,43 +1,74 @@
 #!/bin/bash
 
-# Shell script to download and install prerequisites on Linux/Ubuntu.
+# 用于安装项目前后端所有依赖项和 Playwright 浏览器的脚本
 
-echo
-echo "Starting prerequisite download and installation..."
-echo "Please ensure you have an active internet connection."
-echo
+# 函数：打印信息
+print_info() {
+  echo "INFO: $1"
+}
 
-# 1. Check for Node.js and npm
-echo "Checking for Node.js and npm..."
-if ! command -v node &> /dev/null; then
-    echo "ERROR: Node.js not found. Please install it first (e.g., via nvm or your package manager)." >&2
-    exit 1
+# 函数：打印错误并退出
+print_error() {
+  echo "ERROR: $1" >&2
+  exit 1
+}
+
+# 检查 yarn 是否安装
+if ! command -v yarn &> /dev/null; then
+  print_error "Yarn 未安装。请先使用 'npm install --global yarn' 安装 Yarn。"
 fi
+
+# 检查 npm 是否安装
 if ! command -v npm &> /dev/null; then
-    echo "ERROR: npm not found. Please ensure Node.js installation includes npm." >&2
-    exit 1
+  print_error "npm 未安装。请确保 Node.js 已正确安装并包含 npm。"
 fi
-echo "Node.js and npm found."
 
-# 2. Run npm setup script
-echo
-echo "Running project setup (installing dependencies and browsers via 'npm run setup')..."
-echo "This might take a while..."
-if npm run setup; then
-    echo
-echo "**************************************************"
-    echo " Prerequisite installation process completed successfully."
-    echo " You should now be able to run the application using './start.sh' or 'npm run start:dev'."
-echo "**************************************************"
-    echo
+# 检查 git 是否安装 (如果需要克隆)
+# if ! command -v git &> /dev/null; then
+#   print_error "Git 未安装。请先安装 Git。"
+# fi
+
+# 切换到脚本所在目录 (通常是项目根目录)
+cd "$(dirname "$0")" || print_error "无法切换到项目根目录"
+PROJECT_ROOT=$(pwd)
+print_info "当前目录: ${PROJECT_ROOT}"
+
+# 1. 安装前端依赖 (根目录)
+print_info "正在安装前端依赖 (yarn install)..."
+yarn install
+if [ $? -ne 0 ]; then
+  print_error "前端依赖安装失败 (yarn install)。请检查上面的错误信息。"
+fi
+print_info "前端依赖安装完成。"
+
+# 2. 进入后端目录
+BACKEND_DIR="${PROJECT_ROOT}/flowchart-backend"
+if [ -d "${BACKEND_DIR}" ]; then
+  cd "${BACKEND_DIR}" || print_error "无法进入后端目录: ${BACKEND_DIR}"
+  print_info "已进入后端目录: $(pwd)"
 else
-    echo
-echo "**************************************************"
-    echo " ERROR: Project setup failed during 'npm run setup'."
-    echo " Please check the output above for errors (network issues, missing build tools?)."
-echo "**************************************************"
-    echo
-    exit 1
+  print_error "后端目录未找到: ${BACKEND_DIR}"
 fi
 
+# 3. 安装后端依赖 (flowchart-backend 目录)
+print_info "正在安装后端依赖 (npm install)..."
+npm install
+if [ $? -ne 0 ]; then
+  print_error "后端依赖安装失败 (npm install)。请检查上面的错误信息。"
+fi
+print_info "后端依赖安装完成。"
+
+# 4. 安装 Playwright 浏览器 (flowchart-backend 目录)
+print_info "正在安装 Playwright 浏览器 (npx playwright install --with-deps)..."
+# 注意：如果系统缺少依赖，可能需要 sudo 权限，但这取决于 Playwright 的安装脚本
+npx playwright install --with-deps
+if [ $? -ne 0 ]; then
+  print_error "Playwright 浏览器安装失败。请检查上面的错误信息，可能需要手动安装缺失的系统依赖。"
+fi
+print_info "Playwright 浏览器安装完成。"
+
+# 返回项目根目录 (可选)
+cd "${PROJECT_ROOT}" || print_info "无法返回项目根目录"
+
+print_info "所有依赖和浏览器安装成功完成！"
 exit 0 

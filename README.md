@@ -13,12 +13,16 @@
     - 拖拽节点自由布局。
     - 从节点连接点拖出即可创建连接线。
     - 支持画布平移和缩放。
+    - 悬停节点可显示详细信息 Tooltip (使用 `NodeToolbar` 实现，定位更精确)。
 - ✏️ **灵活的编辑功能**: 
-    - **节点编辑**: 右键点击节点可翻转卡片，编辑其标签、目标URL（编辑完成后节点可点击跳转）和详细描述。
+    - **节点编辑**: 右键点击节点可翻转卡片，编辑其标签、目标URL（编辑完成后节点可点击跳转）和详细描述，以及各方向的连接点数量 (0-4)。
     - **连接线编辑**: 双击连接线可添加或修改标签。
 - ✨ **自定义节点/边**: 
     - 支持多种预设节点类型（蓝、绿、黄），易于区分。
     - 自定义渲染的节点和边提供了独特的交互体验。
+- 🌐 **Web内容生成**:
+    - **结构化生成 (默认)**: 在工具栏输入 URL，点击 **"结构生成"** 按钮。后端将爬取网页内容，尝试提取结构化信息 (如标题、段落、列表)，并生成更具逻辑性和可读性的流程图。
+    - **文本提取**: 在工具栏输入 URL，点击 **"文本提取"** 按钮。后端将爬取网页并提取主要文本内容，生成一个简单的节点包含所有文本 (此功能主要用于未来集成 AI 进行内容处理)。
 - 📐 **智能布局与连接**: 
     - 一键**自动布局**功能 (基于ELKjs)，优化复杂图形的排列。
     - 自动阻止创建循环连接，保证流程逻辑的有效性。
@@ -42,10 +46,11 @@
 - **状态管理**: React Hooks (useState, useCallback, useEffect, useRef), ReactFlow Hooks
 - **Web爬虫**: Crawlee (PlaywrightCrawler)
 - **后端**: Node.js, Express
+- **包管理器**: 前端使用 `yarn`, 后端使用 `npm`
 
 ## 环境要求
 
-- **通用**: Git, [Node.js](https://nodejs.org/) (v16+), npm (v8+)
+- **通用**: Git, [Node.js](https://nodejs.org/) (v16+), `npm` (v8+), `yarn` (v1.x)
 - **Linux/Ubuntu**: 可能需要安装 `build-essential` 或类似包，用于编译某些 npm 依赖。
 - **Windows**: 确保 WMI 服务正常且 `wmic.exe` 可访问 (通常需要 `C:\Windows\System32\wbem` 在 PATH 中)。
 
@@ -69,11 +74,18 @@
     *   安装过程中，确保勾选了将 Node.js 和 npm 添加到系统路径 (PATH) 的选项 (通常默认勾选)。
     *   安装完成后，您可以打开命令行工具 (见下一步) 输入 `node -v` 和 `npm -v`，如果能看到版本号输出，则表示安装成功。
 
-3.  **代码编辑器 (推荐)**: 虽然不是必须的，但一个好的代码编辑器能让您更方便地查看和修改代码。推荐使用免费且功能强大的 **Visual Studio Code (VS Code)**。
+3.  **Yarn**: 这是前端项目使用的另一个包管理器。
+    *   安装完 Node.js 和 npm 后，在命令行中运行：
+        ```bash
+        npm install --global yarn
+        ```
+    *   安装完成后，输入 `yarn --version`，如果能看到版本号输出，则表示安装成功。
+
+4.  **代码编辑器 (推荐)**: 虽然不是必须的，但一个好的代码编辑器能让您更方便地查看和修改代码。推荐使用免费且功能强大的 **Visual Studio Code (VS Code)**。
     *   访问 [https://code.visualstudio.com/](https://code.visualstudio.com/)
     *   下载并安装。
 
-4.  **(仅 Windows 用户) 检查 WMI**: 这个项目的部分功能依赖 Windows 的一个系统工具 `wmic.exe`。
+5.  **(仅 Windows 用户) 检查 WMI**: 这个项目的部分功能依赖 Windows 的一个系统工具 `wmic.exe`。
     *   通常它应该存在于 `C:\Windows\System32\wbem` 并且系统可以找到它。如果后面的步骤中遇到与 `wmic.exe` 相关的错误，请尝试以 **管理员身份** 打开 **命令提示符 (cmd)** 或 **PowerShell**，然后运行 `sfc /scannow` 命令来扫描和修复系统文件，完成后重启电脑。
     在powershell中运行dism /online /add-capability /capability:wmic~~~~ ,即可下载（参考https://xbin.live/archives/4174）
 
@@ -101,68 +113,57 @@
 
 **第三步：安装项目依赖**
 
-项目代码依赖许多第三方库才能运行（比如 React, ReactFlow, Crawlee 等）。我们需要使用 npm 将这些库下载到项目中。
+项目代码依赖许多第三方库才能运行。我们需要使用统一的命令来安装前后端依赖和浏览器。
 
-我们提供了方便的脚本来完成此操作。
-
-*   **Windows 用户**: 
-    1.  确保您当前在 PowerShell 窗口中 (如果在 cmd 中，可以输入 `powershell` 进入)。
-    2.  运行安装脚本：
-        ```powershell
-        .\download.ps1
-        ```
-    3.  **权限提示**: 如果您看到关于"执行策略"的错误，说明 PowerShell 阻止运行脚本。您可以输入以下命令 **临时** 允许本次运行 (执行完后策略会自动恢复)：
-        ```powershell
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        ```
-        然后再重新运行 `.\download.ps1`。
-    4.  脚本会自动下载所有需要的库文件和 Playwright 浏览器。这可能需要几分钟时间，取决于您的网络速度。
-
-*   **Linux/Ubuntu 用户**: 
-    1.  首先需要给脚本添加执行权限：
-        ```bash
-        chmod +x download.sh
-        ```
-    2.  运行安装脚本：
-        ```bash
-        ./download.sh
-        ```
-    3.  脚本会自动下载所有需要的库文件和 Playwright 浏览器。
+1.  **运行统一安装命令**: 确保您当前在项目根目录 (`flowchart-editor`) 下。在命令行中运行：
+    ```bash
+    yarn download
+    ```
+    或者，如果您更习惯使用 npm：
+    ```bash
+    npm run download
+    ```
+    这个命令会自动检测您的操作系统，然后执行相应的步骤：
+    *   安装前端依赖 (使用 Yarn)
+    *   安装后端依赖 (使用 npm)
+    *   安装 Playwright 浏览器
+    请耐心等待所有步骤完成，这可能需要几分钟时间，取决于您的网络速度。
 
 **第四步：启动应用程序**
 
-这个项目包含两个主要部分：
+这个项目包含两个主要部分：前端和后端。我们需要同时启动它们。
 
-*   **后端 (Backend)**: 负责处理数据，比如爬取网页内容、生成流程图数据。它是一个 API 服务。
-*   **前端 (Frontend)**: 用户在浏览器中看到的界面，负责展示流程图、与用户交互，并与后端通信。
-
-我们需要同时启动这两个部分。
-
-*   **Windows 用户**: 
-    1.  在 PowerShell 窗口中运行启动脚本：
-        ```powershell
-        .\start.ps1
-        ```
-    2.  **权限提示**: 同样，如果遇到执行策略错误，请先运行 `Set-ExecutionPolicy Bypass -Scope Process -Force` 再试。
-    3.  您会看到 **两个新的命令行窗口** 弹出，一个标题为 "Flowchart Backend"，另一个是 "Flowchart Frontend"。这些窗口会显示服务的启动日志。**不要关闭这两个新窗口**，它们需要保持运行。
-    4.  原始的 PowerShell 窗口会显示一些信息并提示您可以按 Enter 退出。您可以按 Enter 关闭这个原始窗口，服务已经在新窗口中运行了。
-
-*   **Linux/Ubuntu 用户**: 
-    1.  给启动脚本添加执行权限：
+1.  **启动后端服务**:
+    *   确保您仍在 `flowchart-backend` 目录下。
+    *   在命令行中运行：
         ```bash
-        chmod +x start.sh
+        npm start
         ```
-    2.  运行启动脚本：
+        或者，如果开发者模式可用 (查看 `flowchart-backend/package.json` 中的 `scripts`)：
         ```bash
-        ./start.sh
+        npm run dev
         ```
-    3.  启动信息会直接显示在当前的终端窗口中，同时启动后端和前端。要停止服务时，可以按 `Ctrl + C`。
+    *   您会看到后端服务启动的日志信息。**保持这个命令行窗口打开**，服务需要持续运行。
+
+2.  **启动前端服务**:
+    *   **打开一个新的命令行窗口** (不要关闭后端的窗口)。
+    *   使用 `cd` 命令导航回项目根目录：
+        ```bash
+        # 示例：如果当前在 flowchart-backend，需要先返回上一级
+        cd .. 
+        # 现在应该在 flowchart-editor 根目录
+        ```
+    *   在项目根目录 (`flowchart-editor`)下，运行：
+        ```bash
+        yarn dev
+        ```
+    *   您会看到前端开发服务器 (Vite) 启动的日志信息，通常会显示一个本地访问地址。**保持这个命令行窗口也打开**。
 
 **第五步：访问应用程序**
 
-当启动脚本成功运行后：
+当两个服务都成功启动后：
 
-1.  观察 **前端** (Frontend) 的启动日志 (Windows 用户看标题为 "Flowchart Frontend" 的窗口，Linux 用户看当前终端)。
+1.  查看 **前端** 命令行窗口的输出。
 2.  您应该会看到类似 `Local: http://localhost:5173/` 这样的地址。这是您可以在浏览器中访问的本地网址。
 3.  打开您的 Web 浏览器 (如 Chrome, Firefox, Edge)。
 4.  在地址栏输入上面看到的地址 (通常是 `http://localhost:5173`) 并回车。
@@ -170,18 +171,19 @@
 
 **遇到问题怎么办？(Troubleshooting)**
 
-*   **脚本执行权限问题 (PowerShell)**: 尝试运行 `Set-ExecutionPolicy Bypass -Scope Process -Force`。
-*   **脚本执行权限问题 (Linux/Ubuntu)**: 确保使用了 `chmod +x` 命令。
-*   **`wmic.exe` 错误 (Windows)**: 尝试以管理员身份运行 `sfc /scannow` 并重启。
-*   **依赖安装失败 (`download.ps1` / `download.sh` / `npm run setup`)**: 检查您的网络连接是否正常。可以尝试进入对应的目录 (`cd flowchart-backend` 或项目根目录) 手动运行 `npm install` 查看详细错误。
-*   **端口冲突**: 脚本默认使用端口 5000 (后端) 和 5173 (前端)。如果这些端口已被其他程序占用，启动会失败。您需要关闭占用端口的程序或修改项目配置 (较复杂)。
-*   **爬取功能失败**: 确保 Playwright 浏览器已通过 `download` 脚本或 `npm run install:browsers` 成功安装。检查后端窗口是否有报错信息。
+*   **依赖安装失败 (`yarn download` 或 `npm run download`)**: 仔细查看命令行输出的详细错误信息。检查您的网络连接是否正常。确认 Node.js, npm, 和 yarn 都已正确安装并添加到系统路径。可能缺少某些系统依赖 (特别是 Playwright 浏览器安装步骤)。
+*   **脚本执行权限问题 (Linux/macOS)**: 如果 `yarn download` 或 `npm run download` 内部调用 `download.sh` 时出现权限错误，请尝试手动给 `download.sh` 添加执行权限：`chmod +x download.sh`，然后再次运行下载命令。
+*   **脚本执行权限问题 (PowerShell)**: 如果 `yarn download` 或 `npm run download` 内部调用 `download.ps1` 时遇到执行策略错误，它会尝试使用 `-ExecutionPolicy Bypass` 绕过。如果仍然失败，您可能需要以管理员身份打开 PowerShell 并调整执行策略 (请谨慎操作并了解其含义)。
+*   **Playwright 浏览器安装失败**: 确保网络连接良好，系统有足够权限下载和安装。查看 Playwright 的官方文档获取特定操作系统的故障排除步骤。
+*   **`wmic.exe` 错误 (Windows)**: 尝试以管理员身份运行 `sfc /scannow` 并重启，或运行 `dism` 命令安装。
+*   **端口冲突**: 后端默认使用 5000 端口，前端默认使用 5173 端口。如果这些端口已被其他程序占用，启动会失败。您需要关闭占用端口的程序或修改项目配置 (较复杂)。
+*   **爬取功能失败**: 确保 Playwright 浏览器已成功安装 (通过 `yarn download` 或 `npm run download`)。检查 **后端** 命令行窗口是否有报错信息。确认输入的 URL 是可访问的。
 
 **下一步**
 
-现在您可以开始使用编辑器了！尝试在顶部的输入框中输入一个网址 (例如 `https://www.example.com`)，然后点击"生成"按钮，看看自动生成的流程图效果。您也可以手动添加、编辑节点和连接线。更多功能请参考本 README 的其他部分。
+现在您可以开始使用编辑器了！尝试在顶部的输入框中输入一个网址 (例如 `https://www.example.com`)，然后点击 **"结构生成"** 按钮，看看自动生成的流程图效果。您也可以点击 **"文本提取"** 按钮体验不同的生成方式。同时，您可以手动添加、编辑节点和连接线。
 
-## 快速开始
+## 快速开始 (供有经验的开发者)
 
 ### 1. 获取代码
 
@@ -190,92 +192,69 @@ git clone https://github.com/your-username/flowchart-editor.git
 cd flowchart-editor
 ```
 
-### 2. 安装依赖与设置 (推荐)
+### 2. 安装依赖
 
-此步骤会安装前后端所有 npm 依赖，并下载 Playwright 浏览器驱动。
+```bash
+# 在项目根目录运行统一安装命令
+yarn download
+# 或者 npm run download
+```
 
-*   **跨平台方法 (使用 npm script):**
+### 3. 运行应用 (需要两个终端)
+
+*   **终端 1 (启动后端):**
     ```bash
-    npm run setup
+    cd flowchart-backend
+    npm start  # 或者 npm run dev
     ```
-*   **Windows (PowerShell):**
-    ```powershell
-    .\download.ps1 
-    ```
-    *(如果遇到执行策略问题，可能需要先运行 `Set-ExecutionPolicy Bypass -Scope Process -Force`)*
-*   **Linux/Ubuntu (Bash):**
+*   **终端 2 (启动前端):**
     ```bash
-    chmod +x download.sh
-    ./download.sh
+    # 确保在项目根目录
+    yarn dev
     ```
-
-### 3. 运行应用
-
-此步骤会同时启动后端 API 服务和前端 Vite 开发服务器。
-
-*   **跨平台方法 (使用 npm script):**
-    ```bash
-    npm run start:dev
-    ```
-    *(按 Ctrl+C 停止)*
-*   **Windows (PowerShell):**
-    ```powershell
-    .\start.ps1
-    ```
-    *(服务将在新窗口中启动，可关闭此脚本窗口)*
-*   **Linux/Ubuntu (Bash):**
-    ```bash
-    chmod +x start.sh
-    ./start.sh
-    ```
-    *(按 Ctrl+C 停止)*
 
 ### 4. 访问应用
 
-启动后，在浏览器中访问前端开发服务器提供的地址 (通常是 `http://localhost:5173`)。
+启动后，在浏览器中访问 Vite 提供的地址 (通常是 `http://localhost:5173`)。
 
 ## 开发
 
-- **代码检查 (Lint)**: `npm run lint`
-- **生产构建**: `npm run build`
+- **代码检查 (Lint)**: `yarn lint` (在根目录运行)
+- **生产构建 (前端)**: `yarn build` (在根目录运行)
 
-## 项目结构
+## 项目结构 (简化)
 
 ```
 flowchart-editor/
-├── src/
-│   ├── components/       # React 组件
-│   │   ├── CustomNode.tsx  # 自定义节点实现 (含编辑逻辑)
-│   │   ├── CustomEdge.tsx  # 自定义边实现 (含标签编辑)
-│   │   └── Toolbar.tsx     # 顶部工具栏UI与交互
-│   ├── utils/            # 辅助函数与逻辑模块
-│   │   ├── autoLayout.ts   # ELKjs 自动布局
-│   │   ├── exportToHtml.ts # 导出HTML逻辑
-│   │   ├── graphValidation.ts# 图验证 (如循环检测)
-│   │   ├── jsonUtils.ts    # JSON导入/导出
-│   │   └── storageUtils.ts # 本地存储操作
-│   ├── types.ts          # TypeScript 类型定义
-│   ├── App.tsx           # 主应用组件 (ReactFlow配置、状态、回调)
-│   └── main.tsx          # 应用入口点
-├── flowchart-backend/    # 后端服务
-│   ├── src/
-│   │   └── server.js     # Express 服务器 (爬虫和内容提取API)
-│   └── package.json      # 后端依赖
-├── start.ps1             # PowerShell 启动脚本 (Windows)
-├── start.bat             # Windows Batch 启动脚本 (备用)
-├── start.sh              # Bash 启动脚本 (Linux/Ubuntu)
-├── download.ps1          # PowerShell 依赖安装脚本 (Windows)
-├── download.bat          # Windows 依赖安装脚本 (备用)
-├── download.sh           # Bash 依赖安装脚本 (Linux/Ubuntu)
-├── package.json          # 项目配置与依赖 (前端/根)
-├── README.md             # 项目说明文档
-└── ...                   # 其他配置文件 (Vite, TS, Tailwind, etc.)
+├── flowchart-backend/       # 后端 Node.js/Express 应用
+│   ├── src/                 # 后端源码 (爬虫逻辑等)
+│   ├── storage/             # Crawlee 存储目录
+│   ├── package.json         # 后端 npm 依赖
+│   └── package-lock.json    # 后端 npm 锁文件
+│   └── tsconfig.json        # 后端 TS 配置
+├── src/                     # 前端 React 应用源码
+│   ├── components/          # React 组件
+│   │   ├── CustomNode.tsx   # 自定义节点实现 (含编辑逻辑, Tooltip)
+│   │   ├── CustomEdge.tsx   # 自定义边实现 (含标签编辑)
+│   │   └── Toolbar.tsx      # 顶部工具栏 UI 与交互
+│   ├── types/               # TypeScript 类型定义
+│   ├── utils/               # 工具函数
+│   └── App.tsx              # 主应用组件
+│   └── main.tsx             # 应用入口
+├── public/                  # 静态资源
+├── package.json             # 前端 yarn 依赖
+├── yarn.lock                # 前端 yarn 锁文件
+├── vite.config.ts           # Vite 配置
+├── tsconfig.json            # 前端 TS 配置
+├── tailwind.config.js       # Tailwind CSS 配置
+├── README.md                # 项目说明 (就是你正在看的这个文件)
+└── ...                      # 其他配置文件 (.gitignore, .eslintrc.cjs等)
 ```
 
-## 贡献指南
+## 贡献
 
-欢迎提交问题 (Issues) 和拉取请求 (Pull Requests)。对于重大更改，请先创建一个Issue进行讨论。
+欢迎提出 Issues 或 Pull Requests！
 
-## 许可证
+## License
 
-MIT 
+[MIT](LICENSE) 
