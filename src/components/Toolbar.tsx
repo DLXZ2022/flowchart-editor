@@ -290,7 +290,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-purple-500 hover:bg-purple-600'
               } text-white transition-colors rounded-none`}
-              title="从URL生成高级结构化流程图"
+              title="从URL生成基础结构化流程图"
             >
               {isLoading ? (
                 <>
@@ -319,14 +319,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-500 hover:bg-blue-600'
               } text-white transition-colors`}
-              title="从URL生成基本流程图 (用于AI处理)"
+              title="从URL生成高级流程图 (用于AI处理)"
             >
               {isLoading ? (
                 <span>生成中...</span>
               ) : (
                 <>
                   <GlobeAltIcon className="w-4 h-4 mr-1" />
-                  <span>AI处理</span>
+                  <span>智能处理</span>
                 </>
               )}
             </button>

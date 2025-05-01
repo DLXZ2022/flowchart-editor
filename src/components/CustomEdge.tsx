@@ -21,12 +21,13 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
   style = {},
   markerEnd,
   selected,
+  pathOptions,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data?.label || '');
   // const { setEdges } = useReactFlow(); 
 
-  // 使用平滑路径，提供更好的避让效果
+  // 使用平滑路径，提供更好的避让效果和圆角
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -34,7 +35,7 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 16,
+    borderRadius: pathOptions?.borderRadius || 30, // 更大的圆角半径
   });
 
   // 保存标签编辑
@@ -64,8 +65,9 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
         id={id}
         style={{
           ...style,
-          strokeWidth: selected ? 4 : 3,
-          stroke: selected ? '#ff7300' : '#888',
+          strokeWidth: selected ? 4 : 2.5, // 稍微细一点的线条
+          stroke: selected ? '#6366f1' : '#94a3b8', // 选中时为靛蓝色，默认为浅灰色
+          transition: 'stroke-width 0.2s, stroke 0.2s', // 平滑过渡动画
         }}
         className="react-flow__edge-path"
         d={edgePath}
@@ -77,11 +79,14 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
-            fontSize: 12,
+            fontSize: 11, // 更小的字体
             fontWeight: 500,
-            zIndex: 1 
+            zIndex: 1,
           }}
-          className="nodrag nopan bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 shadow-sm"
+          className={`nodrag nopan px-2 py-0.5 rounded-full text-center shadow-sm transition-all duration-200
+            ${selected 
+              ? 'bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700' 
+              : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'}`}
           onDoubleClick={handleDoubleClick}
         >
           {isEditing ? (
@@ -90,7 +95,7 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
                 type="text"
                 value={label}
                 onChange={handleLabelChange}
-                className="border border-gray-300 dark:border-gray-600 px-1 py-0.5 text-xs w-auto min-w-[80px] mr-1 outline-none focus:ring-1 focus:ring-blue-400 dark:bg-gray-700 dark:text-gray-200"
+                className="border border-gray-300 dark:border-gray-600 px-1 py-0.5 text-xs w-auto min-w-[80px] mr-1 outline-none focus:ring-1 focus:ring-indigo-400 rounded dark:bg-gray-700 dark:text-gray-200"
                 autoFocus
                 onBlur={handleLabelSave} 
                 onKeyDown={(e) => {
@@ -99,7 +104,7 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
                 }}
               />
               <button 
-                className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-0.5 rounded transition-colors"
+                className="bg-indigo-500 hover:bg-indigo-600 text-white text-xs px-2 py-0.5 rounded transition-colors"
                 onClick={handleLabelSave}
                 title="保存"
               >
@@ -108,11 +113,14 @@ const CustomEdge: React.FC<EdgeProps<any>> = ({
             </div>
           ) : (
             <div
-              className="cursor-pointer select-none min-h-[1em] text-gray-900 dark:text-gray-200"
+              className={`cursor-pointer select-none min-h-[1em] min-w-[1.5em]
+                ${selected 
+                  ? 'text-indigo-800 dark:text-indigo-300' 
+                  : 'text-gray-700 dark:text-gray-300'}`}
               title="双击编辑标签"
             >
               {/* 使用 label 状态显示，为空时显示占位符 */}
-              {label || <span className="text-gray-400 dark:text-gray-500 italic">(双击添加)</span>}
+              {label || <span className="text-gray-400 dark:text-gray-500 italic text-[10px]">(双击添加)</span>}
             </div>
           )}
         </div>

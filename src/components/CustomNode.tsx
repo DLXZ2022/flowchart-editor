@@ -1,7 +1,9 @@
-import React, { useState, useCallback } from 'react';
-import { Handle, Position, useReactFlow } from '@xyflow/react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Handle, Position, useReactFlow, NodeToolbar } from '@xyflow/react';
 import { z } from 'zod';
 import { NodeDataType } from '../types';
+import NodeTooltip from './NodeTooltip';
+import NodeTypeIcon from './NodeTypeIcon';
 
 // 添加链接图标
 import { LinkIcon } from '@heroicons/react/24/outline';
@@ -9,11 +11,26 @@ import { LinkIcon } from '@heroicons/react/24/outline';
 // URL验证schema
 const urlSchema = z.string().url({ message: "无效的 URL" });
 
-// 节点类型样式
+// 节点类型样式映射
 const nodeTypeStyles = {
-  typeA: 'bg-blue-500 border-blue-700',
-  typeB: 'bg-green-500 border-green-700',
-  typeC: 'bg-yellow-500 border-yellow-700',
+  typeA: {
+    border: 'border-blue-500',
+    accent: 'border-l-4 border-l-blue-500',
+    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    icon: 'text-blue-600 dark:text-blue-400',
+  },
+  typeB: {
+    border: 'border-green-500',
+    accent: 'border-l-4 border-l-green-500',
+    bg: 'bg-green-50 dark:bg-green-900/20',
+    icon: 'text-green-600 dark:text-green-400',
+  },
+  typeC: {
+    border: 'border-yellow-500',
+    accent: 'border-l-4 border-l-yellow-500',
+    bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+    icon: 'text-yellow-600 dark:text-yellow-400',
+  },
 } as const;
 
 type NodeType = keyof typeof nodeTypeStyles;
@@ -31,6 +48,12 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
   const [label, setLabel] = useState(data.label || '');
   const [description, setDescription] = useState(data.description || '');
   const [urlError, setUrlError] = useState<string | null>(null);
+  const nodeRef = useRef<HTMLDivElement>(null);
+  
+  // 节点悬停状态
+  const [isHovering, setIsHovering] = useState(false);
+  // 计时器，用于延迟显示tooltip
+  const hoverTimerRef = useRef<number | null>(null);
   
   // 为连接点数量添加状态
   const [handleCounts, setHandleCounts] = useState({
@@ -117,16 +140,36 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
   }, [updateNodeData]);
 
   // 获取节点样式
-  const nodeStyle = nodeTypeStyles[data.type as NodeType] || 'bg-gray-500 border-gray-700';
+  const nodeStyle = nodeTypeStyles[data.type as NodeType] || nodeTypeStyles.typeA;
 
-  // 处理URL点击事件
-  const handleUrlClick = useCallback((event: React.MouseEvent) => {
-    event.stopPropagation(); // 阻止事件冒泡，不触发节点选择
-    
-    if (data.url) {
-      window.open(data.url, '_blank');
+  // 鼠标悬停事件
+  const handleMouseEnter = useCallback(() => {
+    if (hoverTimerRef.current) {
+      window.clearTimeout(hoverTimerRef.current);
     }
-  }, [data.url]);
+    
+    hoverTimerRef.current = window.setTimeout(() => {
+      setIsHovering(true);
+    }, 200);
+  }, []);
+
+  // 鼠标离开事件
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setIsHovering(false);
+  }, []);
+
+  // 在组件卸载时清除定时器
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) {
+        window.clearTimeout(hoverTimerRef.current);
+      }
+    };
+  }, []);
 
   // 生成连接点列表
   const renderHandles = () => {
@@ -374,34 +417,53 @@ const CustomNode: React.FC<CustomNodeProps> = ({ id, data, isConnectable }) => {
       </div>
     );
   } else {
-    // 正面显示
+    // 正面显示 - 新的简洁设计
     return (
       <>
         {renderHandles()}
-        <div className={`px-4 py-2 border-2 rounded-lg shadow-md ${nodeStyle} relative min-w-[150px] min-h-[60px] transition-shadow duration-200 hover:shadow-lg`}>
-          <div className="text-white font-medium text-lg mb-1 pr-6">
-            {data.label || '未命名节点'}
+        
+        {/* 使用NodeToolbar组件来显示tooltip，它会自动处理定位问题 */}
+        <NodeToolbar 
+          nodeId={id}
+          isVisible={isHovering}
+          position={Position.Right} // 位置在节点右侧
+          offset={10} // 与节点的距离
+          align="center" // 对齐方式
+          className="z-50"
+        >
+          <NodeTooltip data={data} />
+        </NodeToolbar>
+        
+        <div 
+          ref={nodeRef}
+          className={`border rounded-md shadow-sm ${nodeStyle.border} ${nodeStyle.bg} ${nodeStyle.accent} transition-shadow duration-200 hover:shadow-md min-w-[120px]`}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          {/* 节点主内容 */}
+          <div className="px-3 py-2 flex items-center">
+            {/* 图标 */}
+            <div className={`flex-shrink-0 mr-2 ${nodeStyle.icon}`}>
+              <NodeTypeIcon type={data.type} size={16} />
+            </div>
             
-            {/* URL指示图标和点击功能 */}
+            {/* 标题 (短摘要) */}
+            <div className="flex-grow truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+              {data.label ? (
+                data.label.length > 20 ? data.label.substring(0, 20) + '...' : data.label
+              ) : '未命名节点'}
+            </div>
+            
+            {/* URL指示图标 */}
             {data.url && (
-              <button 
-                onClick={handleUrlClick}
-                className="absolute top-2 right-2 p-1 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
-                title={`访问链接: ${data.url}`}
-              >
-                <LinkIcon className="w-4 h-4 text-white" />
-              </button>
+              <div className="flex-shrink-0 ml-1 text-gray-500 dark:text-gray-400">
+                <LinkIcon className="w-3.5 h-3.5" />
+              </div>
             )}
           </div>
           
-          {data.description && (
-            <div className="text-white text-opacity-80 text-sm truncate max-w-[180px]" title={data.description}>
-              {data.description}
-            </div>
-          )}
-
-          <div className="text-xs text-white opacity-75 text-right mt-2">
-            右键点击编辑
+          <div className="text-[10px] text-right text-gray-500 dark:text-gray-400 pr-2 pb-1">
+            悬停查看详情
           </div>
         </div>
       </>

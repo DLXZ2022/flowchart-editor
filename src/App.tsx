@@ -80,6 +80,26 @@ const edgeTypes: EdgeTypes = {
   custom: CustomEdge as any, // 使用类型断言解决类型问题
 };
 
+// 修改默认边属性，解决类型错误
+const defaultEdgeOptions = {
+  type: 'custom',
+  animated: false,
+  style: {
+    strokeWidth: 2.5,
+    stroke: '#94a3b8',
+  },
+  markerEnd: {
+    type: 'arrowclosed' as const, // 使用类型断言确保类型安全
+    width: 18,
+    height: 18,
+    color: '#94a3b8',
+  },
+  // 使用更大的圆角半径让线条更平滑
+  pathOptions: {
+    borderRadius: 30,
+  },
+};
+
 // 初始节点和边
 const initialNodes: FlowchartNode[] = [
   {
@@ -682,6 +702,7 @@ const FlowchartEditor: React.FC = () => {
       />
       <div className="h-[calc(100%-60px)] relative">
         <ReactFlow
+          ref={reactFlowRef}
           nodes={nodes as any}
           edges={edges as any}
           onNodesChange={onNodesChange as any}
@@ -689,20 +710,20 @@ const FlowchartEditor: React.FC = () => {
           onConnect={onConnect as any}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onNodeClick={onNodeClick as any}
-          onNodeContextMenu={onNodeContextMenu as any}
-          onPaneClick={onPaneClick}
-          isValidConnection={isValidConnection as any}
+          defaultEdgeOptions={defaultEdgeOptions as any}
           onInit={setReactFlowInstance as any}
-          fitView
-          attributionPosition="bottom-left"
-          ref={reactFlowRef}
           onSelectionChange={onSelectionChange}
-          multiSelectionKeyCode="Control"
-          selectionOnDrag
+          onPaneClick={onPaneClick}
+          onNodeClick={onNodeClick as any}
+          selectionOnDrag={false}
           selectionMode={SelectionMode.Partial}
-          selectNodesOnDrag
-          deleteKeyCode={null} // 禁用内置的删除功能，使用我们自定义的删除处理
+          onNodeContextMenu={onNodeContextMenu as any}
+          proOptions={{ hideAttribution: true }}
+          selectNodesOnDrag={false}
+          minZoom={0.1}
+          maxZoom={8}
+          nodesDraggable={!isEditing}
+          nodesConnectable={!isEditing}
           className="dark:bg-gray-900"
         >
           <Controls className="dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700" />
